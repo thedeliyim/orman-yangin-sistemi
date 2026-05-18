@@ -1,0 +1,951 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Orman Yangın İzleme Sistemi</title>
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            transition: background 0.3s ease;
+        }
+        
+        /* Yangın alarmı için arka plan yanıp sönme animasyonu */
+        @keyframes fire-alarm-bg {
+            0% { background: #f8acb3; }
+            25% { background: #f76170; }
+            50% { background: #e61313; }
+            75% { background: #f76170; }
+            100% { background: #f8acb3; }
+        }
+        
+        body.fire-alarm {
+            animation: fire-alarm-bg 1.0s ease-in-out infinite !important;
+        }
+        
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+        
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+        
+        .stats {
+            display: flex;
+            justify-content: space-around;
+            padding: 20px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #e0e0e0;
+            flex-wrap: wrap;
+        }
+        
+        .stat-card {
+            text-align: center;
+            min-width: 100px;
+        }
+        
+        .stat-number {
+            font-size: 2em;
+            font-weight: bold;
+            color: #667eea;
+        }
+        
+        .stat-label {
+            color: #666;
+            margin-top: 5px;
+        }
+        
+        .tab-buttons {
+            display: flex;
+            background: #f8f9fa;
+            border-bottom: 2px solid #e0e0e0;
+        }
+        
+        .tab-btn {
+            flex: 1;
+            padding: 15px;
+            background: none;
+            border: none;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            color: #666;
+        }
+        
+        .tab-btn:hover {
+            background: #e9ecef;
+        }
+        
+        .tab-btn.active {
+            color: #667eea;
+            border-bottom: 3px solid #667eea;
+            background: white;
+        }
+        
+        .tab-content {
+            display: none;
+            padding: 30px;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        .table-container {
+            overflow-x: auto;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+        
+        th {
+            background: #667eea;
+            color: white;
+            padding: 15px;
+            text-align: left;
+            font-weight: 600;
+            position: sticky;
+            top: 0;
+        }
+        
+        td {
+            padding: 12px 15px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        
+        tr:hover {
+            background: #f5f5f5;
+            transition: background 0.3s ease;
+        }
+        
+        .status-active {
+            color: #28a745;
+            font-weight: bold;
+        }
+        
+        .status-inactive {
+            color: #dc3545;
+            font-weight: bold;
+        }
+        
+        .status-warning {
+            color: #ffc107;
+            font-weight: bold;
+        }
+        
+        .badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        
+        .refresh-btn {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 50px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            transition: transform 0.2s ease;
+            z-index: 1000;
+        }
+        
+        .refresh-btn:hover {
+            transform: scale(1.05);
+            background: #5a67d8;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 50px;
+            font-size: 1.2em;
+            color: #666;
+        }
+        
+        .error-message {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            margin: 20px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        
+        .realtime-badge {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #28a745;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+            z-index: 1000;
+            animation: pulse 2s infinite;
+        }
+        
+        #map {
+            height: 550px;
+            border-radius: 10px;
+            margin-top: 10px;
+            z-index: 1;
+        }
+        
+        .map-info {
+            margin-top: 15px;
+            padding: 12px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            font-size: 13px;
+            color: #666;
+            text-align: center;
+            border-left: 4px solid #667eea;
+        }
+        
+        .legend {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin-top: 10px;
+            flex-wrap: wrap;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+        }
+        
+        .legend-color {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            border: 2px solid white;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+        }
+        
+        @keyframes alarm-ring-fast {
+            0% {
+                transform: scale(1);
+                opacity: 0.8;
+            }
+            100% {
+                transform: scale(3.5);
+                opacity: 0;
+            }
+        }
+        
+        @keyframes pulse {
+            0% { 
+                opacity: 0.8;
+                transform: scale(1);
+            }
+            50% { 
+                opacity: 1;
+                transform: scale(1.1);
+            }
+            100% { 
+                opacity: 0.8;
+                transform: scale(1);
+            }
+        }
+        
+        @keyframes legend-alarm {
+            0% {
+                transform: scale(1);
+                opacity: 0.8;
+            }
+            100% {
+                transform: scale(1.5);
+                opacity: 0;
+            }
+        }
+        
+        @media (max-width: 768px) {
+            .table-container {
+                padding: 15px;
+            }
+            
+            th, td {
+                padding: 8px 10px;
+                font-size: 12px;
+            }
+            
+            .header h1 {
+                font-size: 1.5em;
+            }
+            
+            .realtime-badge {
+                top: 10px;
+                right: 10px;
+                font-size: 10px;
+                padding: 4px 8px;
+            }
+            
+            .tab-content {
+                padding: 15px;
+            }
+            
+            #map {
+                height: 400px;
+            }
+            
+            .legend {
+                gap: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="realtime-badge" id="realtimeBadge">
+        🔴 Bağlanıyor...
+    </div>
+    
+    <div class="container">
+        <div class="header">
+            <h1>🏔️ Orman Yangın İzleme Sistemi</h1>
+            <p>Gerçek Zamanlı Cihaz Takip ve Konum İzleme Sistemi</p>
+        </div>
+        
+        <div class="stats">
+            <div class="stat-card">
+                <div class="stat-number" id="totalDevices">0</div>
+                <div class="stat-label">Toplam Cihaz</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="activeOnMap">0</div>
+                <div class="stat-label">Haritada Gösterilen</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="alarmCount">0</div>
+                <div class="stat-label">⚠️ Alarmdaki Cihaz</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="lastUpdate">-</div>
+                <div class="stat-label">Son Güncelleme</div>
+            </div>
+        </div>
+        
+        <div class="tab-buttons">
+            <button class="tab-btn active" onclick="switchTab('map')">🗺️ Harita Görünümü</button>
+            <button class="tab-btn" onclick="switchTab('table')">📋 Tablo Görünümü</button>
+        </div>
+        
+        <div id="mapTab" class="tab-content active">
+            <div id="map"></div>
+            <div class="map-info">
+                <div>📍 <strong>Harita Kullanımı:</strong> İşaretçilere tıklayarak cihaz detaylarını görebilirsiniz.</div>
+                <div class="legend">
+                    <div class="legend-item">
+                        <div class="legend-color" style="background-color: #28a745;"></div>
+                        <span>Normal</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background-color: #ffc107;"></div>
+                        <span>Uyarı</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background-color: #dc3545;"></div>
+                        <span>Kritik/Yangın Riski</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background-color: #6c757d;"></div>
+                        <span>Bilinmiyor/Pasif</span>
+                    </div>
+                    <div class="legend-item">
+                        <div style="width: 16px; height: 16px; border-radius: 50%; background-color: #dc3545; animation: legend-alarm 1.2s ease-out infinite;"></div>
+                        <span>Alarm Durumu (Büyüyen Halka)</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div id="tableTab" class="tab-content">
+            <div class="table-container">
+                <div id="loadingMessage" class="loading">🔄 Veriler yükleniyor...</div>
+                <table id="deviceTable" style="display: none;">
+                    <thead>
+                        <tr>
+                            <th>Cihaz ID</th>
+                            <th>Sıcaklık (°C)</th>
+                            <th>Nem (%)</th>
+                            <th>Enlem</th>
+                            <th>Boylam</th>
+                            <th>Durum</th>
+                            <th>Son Veri Zamanı</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <button class="refresh-btn" onclick="manualRefresh()">🔄 Yenile</button>
+    
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script>
+        // Supabase Configuration
+        const SUPABASE_URL = 'https://nwgermmkngkiqknpqnkk.supabase.co';
+        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im53Z2VybW1rbmdraXFrbnBxbmtrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcxNDI1MzYsImV4cCI6MjA5MjcxODUzNn0.PIEZZetCgFHCUcRiswgpjFzITAVgqRN4ViSPkRC5d1U';
+        
+        // Supabase istemcisini global olarak tanımla (supabase-js CDN'i supabase değişkenini oluşturuyor)
+        let supabaseClient = null;
+        let realtimeChannel = null;
+        let mapInstance = null;
+        let mapMarkers = [];
+        let alarmRingsArray = [];
+        let devicesData = [];
+        let firstAlarmTriggeredFlag = false;
+        
+        // UTC'yi Türkiye saatine çeviren fonksiyon
+        function formatDate(dateString) {
+            if (!dateString) return '-';
+            
+            try {
+                const date = new Date(dateString);
+                return date.toLocaleString('tr-TR', {
+                    timeZone: 'Europe/Istanbul',
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit',
+                    hour12: false
+                });
+            } catch (error) {
+                return String(dateString);
+            }
+        }
+        
+        function getStatusClass(status) {
+            if (!status) return 'status-inactive';
+            switch(status.toLowerCase()) {
+                case 'active': return 'status-active';
+                case 'warning': return 'status-warning';
+                default: return 'status-inactive';
+            }
+        }
+        
+        function getStatusBadge(status) {
+            const statusClass = getStatusClass(status);
+            const displayStatus = status || 'UNKNOWN';
+            return `<span class="badge ${statusClass}">${displayStatus}</span>`;
+        }
+        
+        function getMarkerColor(status, temperature) {
+            if (temperature && temperature > 40) {
+                return '#dc3545';
+            }
+            if (!status) return '#6c757d';
+            switch(status.toLowerCase()) {
+                case 'active': return '#28a745';
+                case 'warning': return '#ffc107';
+                default: return '#6c757d';
+            }
+        }
+        
+        // Arka plan alarm kontrolü ve harita focus
+        function checkAndSetFireAlarm(devices) {
+            const alarmCountValue = parseInt(document.getElementById('alarmCount').textContent);
+            
+            if (alarmCountValue > 0) {
+                document.body.classList.add('fire-alarm');
+                
+                if (!firstAlarmTriggeredFlag) {
+                    firstAlarmTriggeredFlag = true;
+                    
+                    const alarmDevice = devices.find(device => device.temperature > 40);
+                    
+                    if (alarmDevice && alarmDevice.latitude && alarmDevice.longitude && mapInstance) {
+                        mapInstance.setView([alarmDevice.latitude, alarmDevice.longitude], 15);
+                        
+                        setTimeout(() => {
+                            const alarmMarker = mapMarkers.find(marker => {
+                                const latLng = marker.getLatLng();
+                                return latLng.lat === alarmDevice.latitude && latLng.lng === alarmDevice.longitude;
+                            });
+                            
+                            if (alarmMarker) {
+                                alarmMarker.openPopup();
+                            }
+                        }, 500);
+                        
+                        console.log(`🔥 YANGIN ALARMI! Cihaz: ${alarmDevice.device_id}, Konum: ${alarmDevice.latitude}, ${alarmDevice.longitude}`);
+                    }
+                }
+            } else {
+                document.body.classList.remove('fire-alarm');
+                firstAlarmTriggeredFlag = false;
+            }
+        }
+        
+        // Haritayı başlat
+        function initMap(devices) {
+            if (mapInstance === null) {
+                mapInstance = L.map('map').setView([39.0, 35.0], 6);
+                
+                L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+                    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; CartoDB',
+                    subdomains: 'abcd',
+                    maxZoom: 19,
+                    minZoom: 3
+                }).addTo(mapInstance);
+            }
+            
+            // Eski markerları temizle
+            mapMarkers.forEach(marker => mapInstance.removeLayer(marker));
+            alarmRingsArray.forEach(ring => {
+                if (mapInstance && ring) mapInstance.removeLayer(ring);
+            });
+            mapMarkers = [];
+            alarmRingsArray = [];
+            
+            let activeOnMap = 0;
+            let alarmCount = 0;
+            let markersBounds = [];
+            
+            // Yeni markerları ekle
+            devices.forEach(device => {
+                if (device.latitude && device.longitude && 
+                    device.latitude !== 0 && device.longitude !== 0) {
+                    
+                    activeOnMap++;
+                    const isHighTemp = device.temperature && device.temperature > 40;
+                    
+                    if (isHighTemp) {
+                        alarmCount++;
+                    }
+                    
+                    const markerColor = getMarkerColor(device.status, device.temperature);
+                    
+                    const markerHtml = `
+                        <div style="
+                            background-color: ${markerColor};
+                            width: ${isHighTemp ? '36px' : '24px'};
+                            height: ${isHighTemp ? '36px' : '24px'};
+                            border-radius: 50%;
+                            border: 3px solid white;
+                            box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+                            cursor: pointer;
+                            animation: ${isHighTemp ? 'pulse 0.8s infinite' : 'none'};
+                            position: relative;
+                            z-index: 10;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            font-size: ${isHighTemp ? '18px' : '0'};
+                            font-weight: bold;
+                        ">
+                            ${isHighTemp ? '🔥' : ''}
+                        </div>
+                    `;
+                    
+                    const customIcon = L.divIcon({
+                        html: markerHtml,
+                        className: 'custom-marker',
+                        iconSize: [isHighTemp ? 36 : 24, isHighTemp ? 36 : 24],
+                        popupAnchor: [0, -18]
+                    });
+                    
+                    const warningHtml = isHighTemp ? 
+                        '<p style="margin: 5px 0; color: red; font-weight: bold; font-size: 14px;"><strong>🔥 YANGIN RİSKİ!</strong> Sıcaklık çok yüksek!</p>' : '';
+                    
+                    const popupContent = `
+                        <div style="min-width: 240px;">
+                            <h4 style="margin: 0 0 10px 0; color: #667eea;">📡 ${escapeHtml(device.device_id)}</h4>
+                            <hr style="margin: 5px 0;">
+                            <p style="margin: 8px 0;"><strong>🌡️ Sıcaklık:</strong> <span style="font-size: 20px; font-weight: bold; ${device.temperature > 40 ? 'color: red;' : ''}">${device.temperature !== null ? device.temperature + '°C' : '-'}</span></p>
+                            <p style="margin: 5px 0;"><strong>💧 Nem:</strong> ${device.humidity !== null ? device.humidity + '%' : '-'}</p>
+                            <p style="margin: 5px 0;"><strong>📍 Konum:</strong> ${device.latitude}, ${device.longitude}</p>
+                            <p style="margin: 5px 0;"><strong>⏱️ Zaman:</strong> ${formatDate(device.timestamp)}</p>
+                            <p style="margin: 5px 0;"><strong>📊 Durum:</strong> ${device.status || 'UNKNOWN'}</p>
+                            ${warningHtml}
+                        </div>
+                    `;
+                    
+                    const marker = L.marker([device.latitude, device.longitude], { icon: customIcon })
+                        .bindPopup(popupContent)
+                        .addTo(mapInstance);
+                    
+                    mapMarkers.push(marker);
+                    markersBounds.push([device.latitude, device.longitude]);
+                    
+                    if (isHighTemp) {
+                        const offsetX = 0;
+                        const offsetY = 0;
+                        
+                        const ringDiv = document.createElement('div');
+                        ringDiv.style.cssText = `
+                            position: absolute;
+                            top: 50%;
+                            left: 50%;
+                            width: 20px;
+                            height: 20px;
+                            margin-left: calc(-10px + ${offsetX}px);
+                            margin-top: calc(-10px + ${offsetY}px);
+                            border-radius: 50%;
+                            background: radial-gradient(circle, rgba(255,0,0,0.6) 0%, rgba(255,0,0,0.2) 50%, rgba(220,53,69,0) 80%);
+                            border: 4px solid rgba(255,0,0,0.9);
+                            animation: alarm-ring-fast 1.2s ease-out infinite;
+                            pointer-events: none;
+                            box-shadow: 0 0 10px rgba(255,0,0,0.5);
+                        `;
+                        
+                        const ringIcon = L.divIcon({
+                            html: ringDiv.outerHTML,
+                            className: 'ring-marker',
+                            iconSize: [70, 70],
+                            popupAnchor: [0, 0]
+                        });
+                        
+                        const ring = L.marker([device.latitude, device.longitude], { 
+                            icon: ringIcon,
+                            interactive: false,
+                            zIndexOffset: 5
+                        }).addTo(mapInstance);
+                        
+                        alarmRingsArray.push(ring);
+                    }
+                }
+            });
+            
+            document.getElementById('activeOnMap').textContent = activeOnMap;
+            document.getElementById('alarmCount').textContent = alarmCount;
+            
+            const alarmCountElement = document.getElementById('alarmCount');
+            if (alarmCount > 0) {
+                alarmCountElement.style.color = '#dc3545';
+                alarmCountElement.style.animation = 'pulse 1s infinite';
+            } else {
+                alarmCountElement.style.color = '#667eea';
+                alarmCountElement.style.animation = 'none';
+            }
+            
+            checkAndSetFireAlarm(devices);
+            
+            if (markersBounds.length > 0) {
+                const bounds = L.latLngBounds(markersBounds);
+                mapInstance.fitBounds(bounds.pad(0.2));
+            } else if (activeOnMap === 0) {
+                mapInstance.setView([39.0, 35.0], 6);
+            }
+        }
+        
+        // SUPABASE'DEN DOĞRUDAN VERİ ÇEKME FONKSİYONU
+        async function fetchDataFromSupabase() {
+            if (!supabaseClient) {
+                supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+            }
+            
+            try {
+                // Önce tüm cihazları al
+                const { data: devices, error: devicesError } = await supabaseClient
+                    .from('devices')
+                    .select('*');
+                
+                if (devicesError) {
+                    console.error('Cihazlar çekilirken hata:', devicesError);
+                    throw devicesError;
+                }
+                
+                if (!devices || devices.length === 0) {
+                    console.log('Hiç cihaz bulunamadı');
+                    return [];
+                }
+                
+                // Her cihaz için en son veriyi al
+                const devicesWithLatestData = await Promise.all(
+                    devices.map(async (device) => {
+                        const { data: latestData, error: dataError } = await supabaseClient
+                            .from('device_data')
+                            .select('*')
+                            .eq('device_id', device.device_id)
+                            .order('timestamp', { ascending: false })
+                            .limit(1);
+                        
+                        if (dataError) {
+                            console.error(`Cihaz ${device.device_id} için veri çekme hatası:`, dataError);
+                            return {
+                                device_id: device.device_id,
+                                temperature: null,
+                                humidity: null,
+                                latitude: null,
+                                longitude: null,
+                                status: device.status || 'unknown',
+                                timestamp: null
+                            };
+                        }
+                        
+                        if (latestData && latestData.length > 0) {
+                            return {
+                                device_id: device.device_id,
+                                temperature: latestData[0].temperature,
+                                humidity: latestData[0].humidity,
+                                latitude: latestData[0].latitude,
+                                longitude: latestData[0].longitude,
+                                status: device.status || 'unknown',
+                                timestamp: latestData[0].timestamp
+                            };
+                        } else {
+                            return {
+                                device_id: device.device_id,
+                                temperature: null,
+                                humidity: null,
+                                latitude: null,
+                                longitude: null,
+                                status: device.status || 'unknown',
+                                timestamp: null
+                            };
+                        }
+                    })
+                );
+                
+                return devicesWithLatestData;
+                
+            } catch (error) {
+                console.error('Supabase veri çekme hatası:', error);
+                throw error;
+            }
+        }
+        
+        async function refreshData() {
+            const btn = document.querySelector('.refresh-btn');
+            const originalText = btn.textContent;
+            btn.textContent = '🔄 Yenileniyor...';
+            btn.disabled = true;
+            
+            try {
+                const devices = await fetchDataFromSupabase();
+                devicesData = devices;
+                
+                const loadingDiv = document.getElementById('loadingMessage');
+                const table = document.getElementById('deviceTable');
+                
+                if (devices.length === 0) {
+                    loadingDiv.innerHTML = '📭 Henüz hiç veri bulunmuyor.';
+                    loadingDiv.style.display = 'block';
+                    table.style.display = 'none';
+                } else {
+                    loadingDiv.style.display = 'none';
+                    table.style.display = 'table';
+                    
+                    const tbody = document.getElementById('tableBody');
+                    tbody.innerHTML = devices.map(device => `
+                        <tr>
+                            <td><strong>${escapeHtml(device.device_id)}</strong></td>
+                            <td><span style="${device.temperature > 40 ? 'color: red; font-weight: bold; font-size: 16px;' : ''}">${device.temperature !== null ? device.temperature + '°C' : '-'}${device.temperature > 40 ? ' 🔥' : ''}</span></td>
+                            <td>${device.humidity !== null ? device.humidity + '%' : '-'}</td>
+                            <td>${device.latitude !== null ? device.latitude : '-'}</td>
+                            <td>${device.longitude !== null ? device.longitude : '-'}</td>
+                            <td>${getStatusBadge(device.status)}${device.temperature > 40 ? ' ⚠️ ALARM' : ''}</td>
+                            <td>${formatDate(device.timestamp)}</td>
+                        </tr>
+                    `).join('');
+                }
+                
+                if (document.getElementById('mapTab').classList.contains('active')) {
+                    initMap(devices);
+                }
+                
+                document.getElementById('totalDevices').textContent = devices.length;
+                document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString('tr-TR', {
+                    timeZone: 'Europe/Istanbul',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit',
+                    hour12: false
+                });
+                
+                checkAndSetFireAlarm(devices);
+                
+            } catch (error) {
+                console.error('Veri yenileme hatası:', error);
+                const loadingDiv = document.getElementById('loadingMessage');
+                loadingDiv.innerHTML = '❌ Veriler yüklenirken bir hata oluştu! Sayfayı yenileyin veya daha sonra tekrar deneyin.';
+                loadingDiv.style.display = 'block';
+                loadingDiv.className = 'error-message';
+                document.getElementById('deviceTable').style.display = 'none';
+            } finally {
+                btn.textContent = originalText;
+                btn.disabled = false;
+            }
+        }
+        
+        function manualRefresh() {
+            refreshData();
+            
+            const badge = document.getElementById('realtimeBadge');
+            badge.style.background = '#ffc107';
+            badge.innerHTML = '🔄 Yenileniyor...';
+            setTimeout(() => {
+                if (realtimeChannel && realtimeChannel.state === 'subscribed') {
+                    badge.style.background = '#28a745';
+                    badge.innerHTML = '🟢 Canlı Takip Aktif';
+                }
+            }, 1500);
+        }
+        
+        function switchTab(tab) {
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            if (tab === 'map') {
+                document.querySelector('.tab-btn:first-child').classList.add('active');
+            } else {
+                document.querySelector('.tab-btn:last-child').classList.add('active');
+            }
+            
+            document.getElementById('mapTab').classList.remove('active');
+            document.getElementById('tableTab').classList.remove('active');
+            
+            if (tab === 'map') {
+                document.getElementById('mapTab').classList.add('active');
+                setTimeout(() => {
+                    if (mapInstance) {
+                        mapInstance.invalidateSize();
+                        initMap(devicesData);
+                    } else {
+                        initMap(devicesData);
+                    }
+                }, 100);
+            } else {
+                document.getElementById('tableTab').classList.add('active');
+            }
+        }
+        
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        function setupRealtime() {
+            try {
+                if (!supabaseClient) {
+                    supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+                }
+                
+                const badge = document.getElementById('realtimeBadge');
+                badge.innerHTML = '🟢 Canlı Takip Aktif';
+                badge.style.background = '#28a745';
+                
+                // device_data tablosundaki INSERT olaylarını dinle
+                realtimeChannel = supabaseClient
+                    .channel('device_data_changes')
+                    .on(
+                        'postgres_changes',
+                        {
+                            event: 'INSERT',
+                            schema: 'public',
+                            table: 'device_data'
+                        },
+                        (payload) => {
+                            console.log('Yeni veri geldi!', payload);
+                            refreshData();
+                            
+                            const activeTab = document.getElementById('mapTab').classList.contains('active') ? 'map' : 'table';
+                            if (activeTab === 'map' && mapInstance) {
+                                const container = document.getElementById('map');
+                                container.style.opacity = '0.7';
+                                setTimeout(() => {
+                                    container.style.opacity = '1';
+                                    container.style.transition = 'opacity 0.3s ease';
+                                }, 200);
+                            }
+                            
+                            const badge = document.getElementById('realtimeBadge');
+                            badge.style.background = '#ffc107';
+                            badge.innerHTML = '📨 Yeni Veri Geldi!';
+                            setTimeout(() => {
+                                badge.style.background = '#28a745';
+                                badge.innerHTML = '🟢 Canlı Takip Aktif';
+                            }, 2000);
+                        }
+                    )
+                    .subscribe((status) => {
+                        console.log('Realtime bağlantı durumu:', status);
+                        if (status === 'SUBSCRIBED') {
+                            console.log('✅ Realtime bağlantısı başarılı!');
+                            const badge = document.getElementById('realtimeBadge');
+                            badge.innerHTML = '🟢 Canlı Takip Aktif';
+                            badge.style.background = '#28a745';
+                        } else if (status === 'CHANNEL_ERROR') {
+                            console.error('❌ Realtime bağlantı hatası!');
+                            const badge = document.getElementById('realtimeBadge');
+                            badge.innerHTML = '🔴 Bağlantı Hatası';
+                            badge.style.background = '#dc3545';
+                        }
+                    });
+                    
+            } catch (error) {
+                console.error('Supabase Realtime kurulum hatası:', error);
+                const badge = document.getElementById('realtimeBadge');
+                badge.innerHTML = '⚠️ Realtime Kapalı';
+                badge.style.background = '#ffc107';
+            }
+        }
+        
+        // Sayfa yüklendiğinde
+        document.addEventListener('DOMContentLoaded', () => {
+            refreshData();
+            setupRealtime();
+            // Her 30 saniyede bir yenile (realtime yedek olarak)
+            setInterval(refreshData, 30000);
+        });
+        
+        window.addEventListener('beforeunload', () => {
+            if (realtimeChannel && supabaseClient) {
+                supabaseClient.removeChannel(realtimeChannel);
+            }
+        });
+    </script>
+</body>
+</html>
