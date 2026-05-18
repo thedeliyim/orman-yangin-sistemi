@@ -537,7 +537,7 @@
                     
                     activeOnMap++;
                     const isHighTemp = device.temperature && device.temperature > 40;
-                    const hasFire = device.fire && device.fire > 0;
+                    const hasFire = device.fire && device.fire > 50;
                     const isWarning = device.temperature && device.temperature > 35 && !isHighTemp;
                     
                     const markerColor = getMarkerColor(device.temperature, device.fire);
@@ -603,7 +603,7 @@
                             <hr style="margin: 5px 0;">
                             <p style="margin: 8px 0;"><strong>🌡️ Sıcaklık:</strong> <span style="font-size: 18px; font-weight: bold; ${device.temperature > 40 ? 'color: red;' : (device.temperature > 35 ? 'color: #ffc107;' : '')}">${device.temperature !== null ? device.temperature + '°C' : '-'}</span></p>
                             <p style="margin: 5px 0;"><strong>💧 Nem:</strong> ${device.humidity !== null ? device.humidity + '%' : '-'}</p>
-                            <p style="margin: 5px 0;"><strong>🔥 Ateş Değeri:</strong> <span style="${device.fire > 0 ? 'color: #ff6600; font-weight: bold;' : ''}">${device.fire !== null ? device.fire : '-'} ${device.fire > 0 ? '⚠️ ALGILANDI!' : ''}</span></p>
+                            <p style="margin: 5px 0;"><strong>🔥 Ateş Algılama Değeri:</strong> <span style="${device.fire > 50 ? 'color: #ff6600; font-weight: bold;' : ''}">${device.fire !== null ? device.fire : '-'} ${device.fire > 0 ? '⚠️ ALGILANDI!' : ''}</span></p>
                             <p style="margin: 5px 0;"><strong>📍 Konum:</strong> ${device.latitude}, ${device.longitude}</p>
                             <p style="margin: 5px 0;"><strong>⏱️ Zaman:</strong> ${formatDate(device.timestamp)}</p>
                             <p style="margin: 5px 0;"><strong>📊 Durum:</strong> ${device.status || 'UNKNOWN'}</p>
