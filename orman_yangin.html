@@ -180,9 +180,35 @@
         .legend-item { display: flex; align-items: center; gap: 5px; font-size: 10px; }
         .legend-color { width: 12px; height: 12px; border-radius: 50%; border: 1px solid white; box-shadow: 0 1px 2px rgba(0,0,0,0.2); }
         
+        /* ----- YENİ: İkon stilleri - çerçeve yok, transparan arkaplan ----- */
+        .custom-marker {
+            background: transparent !important;
+            border: none !important;
+            box-shadow: none !important;
+            text-align: center;
+            line-height: normal;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        /* Leaflet'in varsayılan border/stillerini tamamen sıfırlıyoruz */
+        .leaflet-marker-icon.custom-marker,
+        .leaflet-marker-icon.custom-marker div {
+            background: transparent !important;
+            border: none !important;
+            box-shadow: none !important;
+            outline: none !important;
+        }
+        /* Alarm halkaları için de transparan zemin */
+        .ring-marker {
+            background: transparent !important;
+            border: none !important;
+            box-shadow: none !important;
+        }
+        
         @keyframes alarm-ring-fast {
-            0% { transform: scale(1); opacity: 0.8; }
-            100% { transform: scale(3.5); opacity: 0; }
+            0% { transform: scale(0.8); opacity: 0.9; }
+            100% { transform: scale(3); opacity: 0; }
         }
         
         @keyframes pulse {
@@ -270,6 +296,7 @@
         
         function formatDate(d) { if(!d) return '-'; try{ return new Date(d).toLocaleString('tr-TR',{timeZone:'Europe/Istanbul',day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit'}); }catch(e){ return d; } }
         
+        // Renk belirleme (arka plan yok, sadece iç daire rengi)
         function getMarkerColor(temp, fire) {
             if(fire > 50) return '#ff6600';
             if(temp > 40) return '#dc3545';
@@ -286,47 +313,151 @@
             else document.body.classList.remove('fire-alarm');
         }
         
+        // Yeni fonksiyon: transparan arka planlı ve çerçevesiz ikon oluşturma
+        function createTransparentIcon(color, size, emoji, hasFire, isHigh) {
+            // Arkaplan tamamen transparan, border yok, gölge yok.
+            // İçerik: yuvarlak renkli bir div + emoji. Div'in kendisi transparan değil ama icon'un dışı temiz.
+            // Leaflet'in varsayılan beyaz arkaplanını kaldırmak için icon div'ine özel class verip background:transparent!important yapıyoruz.
+            const html = `
+                <div style="
+                    width: ${size}px;
+                    height: ${size}px;
+                    background: ${color};
+                    border-radius: 50%;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-size: ${Math.max(size-12, 14)}px;
+                    font-weight: bold;
+                    box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+                    animation: ${(hasFire || isHigh) ? 'pulse 0.8s infinite' : 'none'};
+                    border: none;
+                    outline: none;
+                ">
+                    ${emoji}
+                </div>
+            `;
+            // Dikkat: Dış div (icon'un kendisi) arkaplan transparan olacak, border sıfır
+            return L.divIcon({
+                html: html,
+                className: 'custom-marker', // global stilde arkaplan transparan
+                iconSize: [size, size],
+                popupAnchor: [0, -size/2],
+                tooltipAnchor: [0, -size/2]
+            });
+        }
+        
+        // Alarm halkası için transparan ikon (çerçevesiz)
+        function createRingIcon(ringColor) {
+            const ringHtml = `
+                <div style="
+                    position: relative;
+                    width: 60px;
+                    height: 60px;
+                    background: transparent;
+                    border: none;
+                ">
+                    <div style="
+                        position: absolute;
+                        top: 50%;
+                        left: 50%;
+                        width: 30px;
+                        height: 30px;
+                        margin: -15px 0 0 -15px;
+                        border-radius: 50%;
+                        background: radial-gradient(circle, ${ringColor}80 0%, ${ringColor}40 50%, ${ringColor}00 80%);
+                        border: 2px solid ${ringColor};
+                        animation: alarm-ring-fast 1.2s infinite;
+                        pointer-events: none;
+                        box-shadow: none;
+                    "></div>
+                </div>
+            `;
+            return L.divIcon({
+                html: ringHtml,
+                className: 'ring-marker',
+                iconSize: [60, 60],
+                popupAnchor: [0, -30],
+                interactive: false
+            });
+        }
+        
         function initMap(devices) {
             if(!mapInstance) {
                 mapInstance = L.map('map').setView([39.0,35.0],6);
-                L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{attribution:'&copy; OSM',subdomains:'abcd',maxZoom:19}).addTo(mapInstance);
+                L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{
+                    attribution:'&copy; OSM',
+                    subdomains:'abcd',
+                    maxZoom:19
+                }).addTo(mapInstance);
             }
-            mapMarkers.forEach(m=>mapInstance.removeLayer(m));
-            alarmRings.forEach(r=>mapInstance.removeLayer(r));
-            mapMarkers = []; alarmRings = [];
+            // Önceki marker'ları ve halkaları temizle
+            mapMarkers.forEach(m => mapInstance.removeLayer(m));
+            alarmRings.forEach(r => mapInstance.removeLayer(r));
+            mapMarkers = [];
+            alarmRings = [];
             
-            let active=0, bounds=[];
-            devices.forEach(d=>{
+            let active = 0;
+            let bounds = [];
+            
+            devices.forEach(d => {
                 if(d.latitude && d.longitude && d.latitude!==0 && d.longitude!==0){
                     active++;
-                    let isHigh = d.temperature>40, hasFire = d.fire>50, isWarn = d.temperature>35 && !isHigh;
-                    let color = getMarkerColor(d.temperature,d.fire);
-                    let size = hasFire?36:(isHigh?32:(isWarn?28:24));
-                    let emoji = hasFire?'🔥':(isHigh?'⚠️':(isWarn?'🌡️':''));
-                    let anim = (hasFire||isHigh)?'pulse 0.8s infinite':'none';
+                    const temp = d.temperature ?? 0;
+                    const fireVal = d.fire ?? 0;
+                    const isHigh = temp > 40;
+                    const hasFire = fireVal > 50;
+                    const isWarn = temp > 35 && !isHigh;
                     
-                    let icon = L.divIcon({html:`<div style="background:${color};width:${size}px;height:${size}px;border-radius:50%;border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.4);animation:${anim};display:flex;align-items:center;justify-content:center;font-size:${size-10}px;">${emoji}</div>`,iconSize:[size,size],popupAnchor:[0,-18]});
+                    let color = getMarkerColor(temp, fireVal);
+                    // Boyut: ateş ve yüksek alarm durumlarında daha büyük, normalde küçük
+                    let size = hasFire ? 36 : (isHigh ? 32 : (isWarn ? 28 : 24));
+                    let emoji = hasFire ? '🔥' : (isHigh ? '⚠️' : (isWarn ? '🌡️' : ''));
                     
-                    let warnHtml = hasFire?'<p style="color:#ff6600;font-weight:bold">🔥 ATEŞ ALGILANDI!</p>':(isHigh?'<p style="color:red;font-weight:bold">⚠️ YANGIN RİSKİ!</p>':(isWarn?'<p style="color:#ffc107;font-weight:bold">🌡️ SICAKLIK UYARISI</p>':''));
+                    // Çerçevesiz, transparan arka planlı ikon
+                    const icon = createTransparentIcon(color, size, emoji, hasFire, isHigh);
                     
-                    let popup = `<div style="min-width:220px"><b>📡 ${escapeHtml(d.device_id)}</b><hr><b>🌡️ Sıcaklık:</b> <span style="color:${d.temperature>40?'red':(d.temperature>35?'#ffc107':'')};font-weight:bold">${d.temperature??'-'}°C</span><br><b>💧 Nem:</b> ${d.humidity??'-'}%<br><b>🔥 Ateş:</b> <span style="${d.fire>50?'color:#ff6600;font-weight:bold':''}">${d.fire??'-'} ${d.fire>50?'ALARM!':''}</span><br><b>📍 Konum:</b> ${d.latitude},${d.longitude}<br><b>⏱️ Zaman:</b> ${formatDate(d.timestamp)}${warnHtml}</div>`;
+                    // Popup içeriği
+                    let warnHtml = '';
+                    if(hasFire) warnHtml = '<p style="color:#ff6600;font-weight:bold; margin-top:5px;">🔥 ATEŞ ALGILANDI!</p>';
+                    else if(isHigh) warnHtml = '<p style="color:red;font-weight:bold; margin-top:5px;">⚠️ YANGIN RİSKİ!</p>';
+                    else if(isWarn) warnHtml = '<p style="color:#ffc107;font-weight:bold; margin-top:5px;">🌡️ SICAKLIK UYARISI</p>';
                     
-                    let marker = L.marker([d.latitude,d.longitude],{icon}).bindPopup(popup).addTo(mapInstance);
+                    const popupContent = `
+                        <div style="min-width:220px">
+                            <b>📡 ${escapeHtml(d.device_id)}</b><hr/>
+                            <b>🌡️ Sıcaklık:</b> <span style="color:${temp>40?'red':(temp>35?'#ffc107':'')};font-weight:bold">${temp ?? '-'}°C</span><br/>
+                            <b>💧 Nem:</b> ${d.humidity ?? '-'}%<br/>
+                            <b>🔥 Ateş:</b> <span style="${fireVal>50?'color:#ff6600;font-weight:bold':''}">${fireVal ?? '-'} ${fireVal>50 ? 'ALARM!' : ''}</span><br/>
+                            <b>📍 Konum:</b> ${d.latitude}, ${d.longitude}<br/>
+                            <b>⏱️ Zaman:</b> ${formatDate(d.timestamp)}
+                            ${warnHtml}
+                        </div>
+                    `;
+                    
+                    const marker = L.marker([d.latitude, d.longitude], { icon: icon, riseOnHover: true })
+                        .bindPopup(popupContent)
+                        .addTo(mapInstance);
+                    
                     mapMarkers.push(marker);
-                    bounds.push([d.latitude,d.longitude]);
+                    bounds.push([d.latitude, d.longitude]);
                     
-                    if(hasFire || isHigh){
-                        let ringColor = hasFire?'#ff6600':'#dc3545';
-                        let ringDiv = document.createElement('div');
-                        ringDiv.style.cssText = `position:absolute;top:50%;left:50%;width:20px;height:20px;margin:-10px;border-radius:50%;background:radial-gradient(circle,${ringColor}80 0%,${ringColor}30 50%,${ringColor}00 80%);border:4px solid ${ringColor};animation:alarm-ring-fast 1.2s infinite;pointer-events:none`;
-                        let ring = L.marker([d.latitude,d.longitude],{icon:L.divIcon({html:ringDiv.outerHTML,iconSize:[70,70]}),interactive:false}).addTo(mapInstance);
-                        alarmRings.push(ring);
+                    // Yangın veya yüksek sıcaklık durumunda alarm halkası ekle (çerçevesiz, transparan)
+                    if(hasFire || isHigh) {
+                        const ringColor = hasFire ? '#ff6600' : '#dc3545';
+                        const ringIcon = createRingIcon(ringColor);
+                        const ringMarker = L.marker([d.latitude, d.longitude], { icon: ringIcon, interactive: false }).addTo(mapInstance);
+                        alarmRings.push(ringMarker);
                     }
                 }
             });
+            
             document.getElementById('activeOnMap').textContent = active;
-            if(bounds.length) mapInstance.fitBounds(L.latLngBounds(bounds).pad(0.2));
-            else mapInstance.setView([39.0,35.0],6);
+            if(bounds.length) {
+                mapInstance.fitBounds(L.latLngBounds(bounds).pad(0.2));
+            } else {
+                mapInstance.setView([39.0, 35.0], 6);
+            }
         }
         
         async function fetchData() {
@@ -337,7 +468,16 @@
                 if(!data || !data.length) return [];
                 let latest = new Map();
                 for(let rec of data) if(!latest.has(rec.device_id)) latest.set(rec.device_id, rec);
-                return Array.from(latest.values()).map(r=>({device_id:r.device_id,temperature:r.temperature,humidity:r.humidity,latitude:r.latitude,longitude:r.longitude,status:r.status||'unknown',timestamp:r.timestamp,fire:r.fire}));
+                return Array.from(latest.values()).map(r=>({
+                    device_id: r.device_id,
+                    temperature: r.temperature,
+                    humidity: r.humidity,
+                    latitude: r.latitude,
+                    longitude: r.longitude,
+                    status: r.status||'unknown',
+                    timestamp: r.timestamp,
+                    fire: r.fire
+                }));
             }catch(e){ console.error(e); throw e; }
         }
         
@@ -355,14 +495,24 @@
                     document.getElementById('tableBody').innerHTML = devices.map(d=>{
                         let tempStyle = d.temperature>40?'color:red;font-weight:bold':(d.temperature>35?'color:#ffc107;font-weight:bold':'');
                         let fireStyle = d.fire>0?'color:#ff6600;font-weight:bold':'';
-                        return `<tr><td><b>${escapeHtml(d.device_id)}</b></td><td><span style="${tempStyle}">${d.temperature??'-'}°C</span></td><td>${d.humidity??'-'}%</td><td><span style="${fireStyle}">${d.fire??'-'}${d.fire>50?'🔥':''}</span></td><td>${d.latitude??'-'},${d.longitude??'-'}</td><td>${formatDate(d.timestamp)}</td></tr>`;
+                        let fireText = (d.fire ?? '-') + (d.fire>50 ? '🔥' : '');
+                        return `<tr>
+                            <td><b>${escapeHtml(d.device_id)}</b></td>
+                            <td><span style="${tempStyle}">${d.temperature??'-'}°C</span></td>
+                            <td>${d.humidity??'-'}%</td>
+                            <td><span style="${fireStyle}">${fireText}</span></td>
+                            <td>${d.latitude??'-'}, ${d.longitude??'-'}</td>
+                            <td>${formatDate(d.timestamp)}</td>
+                        </tr>`;
                     }).join('');
                 }
+                // Eğer harita aktifsek haritayı güncelle
                 if(document.getElementById('mapTab').classList.contains('active')) initMap(devices);
                 document.getElementById('totalDevices').textContent = devices.length;
                 document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString('tr-TR',{timeZone:'Europe/Istanbul',hour:'2-digit',minute:'2-digit',second:'2-digit'});
                 checkAlarm(devices);
             }catch(e){
+                console.error(e);
                 document.getElementById('loadingMessage').innerHTML = '❌ Veri yüklenemedi!';
                 document.getElementById('loadingMessage').className = 'error-message';
             }finally{ btn.textContent=orig; btn.disabled=false; }
@@ -378,7 +528,10 @@
             document.getElementById('tableTab').classList.remove('active');
             if(tab==='map'){
                 document.getElementById('mapTab').classList.add('active');
-                setTimeout(()=>{ if(mapInstance) mapInstance.invalidateSize(); initMap(devicesData); },100);
+                setTimeout(()=>{ 
+                    if(mapInstance) mapInstance.invalidateSize(); 
+                    initMap(devicesData); 
+                }, 100);
             }else document.getElementById('tableTab').classList.add('active');
         }
         
@@ -389,7 +542,9 @@
                 if(!supabaseClient) supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
                 let badge = document.getElementById('realtimeBadge');
                 badge.innerHTML='🟢 Canlı Takip Aktif'; badge.style.background='#28a745';
-                realtimeChannel = supabaseClient.channel('device_data_changes').on('postgres_changes',{event:'INSERT',schema:'public',table:'device_data'},()=>{ refreshData(); }).subscribe(s=>{ if(s==='SUBSCRIBED') console.log('Realtime bağlı'); });
+                realtimeChannel = supabaseClient.channel('device_data_changes')
+                    .on('postgres_changes', {event:'INSERT', schema:'public', table:'device_data'}, () => { refreshData(); })
+                    .subscribe(s=>{ if(s==='SUBSCRIBED') console.log('Realtime bağlı'); });
             }catch(e){ console.error(e); }
         }
         
