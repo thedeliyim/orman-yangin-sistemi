@@ -341,8 +341,12 @@
        function formatDate(d) { 
             if(!d) return '-'; 
             try{ 
-                return new Date(d).toLocaleString('tr-TR', {
-                    timeZone: 'Europe/Istanbul',
+                // UTC'den yerel saate çevir (Türkiye UTC+3)
+                const date = new Date(d);
+                // 3 saat ekle (UTC+3)
+                date.setHours(date.getHours() + 3);
+                
+                return date.toLocaleString('tr-TR', {
                     day: '2-digit',
                     month: '2-digit',
                     year: 'numeric',
