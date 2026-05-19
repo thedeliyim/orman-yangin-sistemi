@@ -180,26 +180,34 @@
         .legend-item { display: flex; align-items: center; gap: 5px; font-size: 10px; }
         .legend-color { width: 12px; height: 12px; border-radius: 50%; border: 1px solid white; box-shadow: 0 1px 2px rgba(0,0,0,0.2); }
         
-        /* ----- YENİ: İkon stilleri - çerçeve yok, transparan arkaplan ----- */
+        /* ===== KRİTİK: Tüm marker elementlerinden çerçeve ve arkaplanı tamamen kaldır ===== */
+        .leaflet-marker-icon,
+        .leaflet-marker-icon.custom-marker,
+        .leaflet-marker-icon.ring-marker,
+        .leaflet-marker-icon > div,
+        img.leaflet-marker-icon,
+        div.leaflet-marker-icon {
+            background: transparent !important;
+            border: none !important;
+            outline: none !important;
+            box-shadow: none !important;
+            background-color: transparent !important;
+        }
+        
+        /* Marker içindeki tüm div'lerden de border kaldır */
+        .leaflet-marker-icon * {
+            border: none !important;
+            outline: none !important;
+        }
+        
+        /* Özel marker class'ı */
         .custom-marker {
             background: transparent !important;
             border: none !important;
             box-shadow: none !important;
-            text-align: center;
-            line-height: normal;
-            display: flex;
-            align-items: center;
-            justify-content: center;
         }
-        /* Leaflet'in varsayılan border/stillerini tamamen sıfırlıyoruz */
-        .leaflet-marker-icon.custom-marker,
-        .leaflet-marker-icon.custom-marker div {
-            background: transparent !important;
-            border: none !important;
-            box-shadow: none !important;
-            outline: none !important;
-        }
-        /* Alarm halkaları için de transparan zemin */
+        
+        /* Alarm halkaları için */
         .ring-marker {
             background: transparent !important;
             border: none !important;
@@ -296,7 +304,6 @@
         
         function formatDate(d) { if(!d) return '-'; try{ return new Date(d).toLocaleString('tr-TR',{timeZone:'Europe/Istanbul',day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit'}); }catch(e){ return d; } }
         
-        // Renk belirleme (arka plan yok, sadece iç daire rengi)
         function getMarkerColor(temp, fire) {
             if(fire > 50) return '#ff6600';
             if(temp > 40) return '#dc3545';
@@ -313,11 +320,8 @@
             else document.body.classList.remove('fire-alarm');
         }
         
-        // Yeni fonksiyon: transparan arka planlı ve çerçevesiz ikon oluşturma
+        // Tamamen transparan arka planlı ve çerçevesiz ikon
         function createTransparentIcon(color, size, emoji, hasFire, isHigh) {
-            // Arkaplan tamamen transparan, border yok, gölge yok.
-            // İçerik: yuvarlak renkli bir div + emoji. Div'in kendisi transparan değil ama icon'un dışı temiz.
-            // Leaflet'in varsayılan beyaz arkaplanını kaldırmak için icon div'ine özel class verip background:transparent!important yapıyoruz.
             const html = `
                 <div style="
                     width: ${size}px;
@@ -329,47 +333,36 @@
                     justify-content: center;
                     font-size: ${Math.max(size-12, 14)}px;
                     font-weight: bold;
-                    box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+                    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
                     animation: ${(hasFire || isHigh) ? 'pulse 0.8s infinite' : 'none'};
-                    border: none;
-                    outline: none;
                 ">
                     ${emoji}
                 </div>
             `;
-            // Dikkat: Dış div (icon'un kendisi) arkaplan transparan olacak, border sıfır
             return L.divIcon({
                 html: html,
-                className: 'custom-marker', // global stilde arkaplan transparan
+                className: 'custom-marker',
                 iconSize: [size, size],
                 popupAnchor: [0, -size/2],
                 tooltipAnchor: [0, -size/2]
             });
         }
         
-        // Alarm halkası için transparan ikon (çerçevesiz)
         function createRingIcon(ringColor) {
             const ringHtml = `
-                <div style="
-                    position: relative;
-                    width: 60px;
-                    height: 60px;
-                    background: transparent;
-                    border: none;
-                ">
+                <div style="position:relative; width:60px; height:60px;">
                     <div style="
                         position: absolute;
                         top: 50%;
                         left: 50%;
-                        width: 30px;
-                        height: 30px;
-                        margin: -15px 0 0 -15px;
+                        width: 34px;
+                        height: 34px;
+                        margin: -17px 0 0 -17px;
                         border-radius: 50%;
-                        background: radial-gradient(circle, ${ringColor}80 0%, ${ringColor}40 50%, ${ringColor}00 80%);
+                        background: radial-gradient(circle, ${ringColor}80 0%, ${ringColor}30 50%, transparent 80%);
                         border: 2px solid ${ringColor};
                         animation: alarm-ring-fast 1.2s infinite;
                         pointer-events: none;
-                        box-shadow: none;
                     "></div>
                 </div>
             `;
@@ -391,7 +384,7 @@
                     maxZoom:19
                 }).addTo(mapInstance);
             }
-            // Önceki marker'ları ve halkaları temizle
+            
             mapMarkers.forEach(m => mapInstance.removeLayer(m));
             alarmRings.forEach(r => mapInstance.removeLayer(r));
             mapMarkers = [];
@@ -410,14 +403,11 @@
                     const isWarn = temp > 35 && !isHigh;
                     
                     let color = getMarkerColor(temp, fireVal);
-                    // Boyut: ateş ve yüksek alarm durumlarında daha büyük, normalde küçük
                     let size = hasFire ? 36 : (isHigh ? 32 : (isWarn ? 28 : 24));
                     let emoji = hasFire ? '🔥' : (isHigh ? '⚠️' : (isWarn ? '🌡️' : ''));
                     
-                    // Çerçevesiz, transparan arka planlı ikon
                     const icon = createTransparentIcon(color, size, emoji, hasFire, isHigh);
                     
-                    // Popup içeriği
                     let warnHtml = '';
                     if(hasFire) warnHtml = '<p style="color:#ff6600;font-weight:bold; margin-top:5px;">🔥 ATEŞ ALGILANDI!</p>';
                     else if(isHigh) warnHtml = '<p style="color:red;font-weight:bold; margin-top:5px;">⚠️ YANGIN RİSKİ!</p>';
@@ -442,7 +432,6 @@
                     mapMarkers.push(marker);
                     bounds.push([d.latitude, d.longitude]);
                     
-                    // Yangın veya yüksek sıcaklık durumunda alarm halkası ekle (çerçevesiz, transparan)
                     if(hasFire || isHigh) {
                         const ringColor = hasFire ? '#ff6600' : '#dc3545';
                         const ringIcon = createRingIcon(ringColor);
@@ -506,7 +495,6 @@
                         </tr>`;
                     }).join('');
                 }
-                // Eğer harita aktifsek haritayı güncelle
                 if(document.getElementById('mapTab').classList.contains('active')) initMap(devices);
                 document.getElementById('totalDevices').textContent = devices.length;
                 document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString('tr-TR',{timeZone:'Europe/Istanbul',hour:'2-digit',minute:'2-digit',second:'2-digit'});
