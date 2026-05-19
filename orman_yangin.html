@@ -337,9 +337,23 @@
         
         let supabaseClient = null, realtimeChannel = null, mapInstance = null, mapMarkers = [], alarmRings = [], devicesData = [];
         let editingRow = null;
-        
-        function formatDate(d) { if(!d) return '-'; try{ return new Date(d).toLocaleString('tr-TR',{timeZone:'Europe/Istanbul',day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit'}); }catch(e){ return d; } }
-        
+
+       function formatDate(d) { 
+            if(!d) return '-'; 
+            try{ 
+                return new Date(d).toLocaleString('tr-TR', {
+                    timeZone: 'Europe/Istanbul',
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit'
+                });
+            } catch(e){ 
+                return d; 
+            } 
+        }
         function getMarkerColor(temp, fire) {
             if(fire > 50) return '#ff6600';
             if(temp > 40) return '#dc3545';
