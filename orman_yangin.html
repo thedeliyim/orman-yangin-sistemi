@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-    <title>Orman Yangın İzleme Sistemi - Yönetim Paneli</title>
+    <title>Orman Yangın İzleme Sistemi</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
@@ -111,6 +111,52 @@
         td { padding: 8px; border-bottom: 1px solid #e0e0e0; }
         tr:hover { background: #f5f5f5; }
         
+        .edit-btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 4px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 11px;
+            margin-right: 5px;
+        }
+        
+        .edit-btn:hover { background: #5a67d8; transform: scale(1.05); }
+        
+        .save-btn {
+            background: #28a745;
+            color: white;
+            border: none;
+            padding: 4px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 11px;
+            margin-right: 5px;
+        }
+        
+        .save-btn:hover { background: #218838; }
+        
+        .cancel-btn {
+            background: #dc3545;
+            color: white;
+            border: none;
+            padding: 4px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 11px;
+        }
+        
+        .cancel-btn:hover { background: #c82333; }
+        
+        .edit-input {
+            width: 70px;
+            padding: 4px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 11px;
+        }
+        
         .refresh-btn {
             position: fixed;
             bottom: 20px;
@@ -169,59 +215,6 @@
         .legend-item { display: flex; align-items: center; gap: 5px; font-size: 10px; }
         .legend-color { width: 12px; height: 12px; border-radius: 50%; border: 1px solid white; box-shadow: 0 1px 2px rgba(0,0,0,0.2); }
         
-        /* Yönetim Panel Stilleri */
-        .admin-panel {
-            background: #f8f9fa;
-            padding: 15px;
-            border-radius: 12px;
-            margin-bottom: 15px;
-        }
-        
-        .admin-controls {
-            display: flex;
-            gap: 10px;
-            align-items: center;
-            flex-wrap: wrap;
-            margin-top: 10px;
-        }
-        
-        .admin-controls select, .admin-controls input {
-            padding: 8px 12px;
-            border: 1px solid #ddd;
-            border-radius: 6px;
-            font-size: 14px;
-        }
-        
-        .admin-controls button {
-            background: #667eea;
-            color: white;
-            border: none;
-            padding: 8px 16px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-weight: bold;
-        }
-        
-        .admin-controls button:hover { background: #5a67d8; }
-        
-        .update-success {
-            background: #28a745;
-            color: white;
-            padding: 10px;
-            border-radius: 6px;
-            margin-top: 10px;
-            display: none;
-        }
-        
-        .update-error {
-            background: #dc3545;
-            color: white;
-            padding: 10px;
-            border-radius: 6px;
-            margin-top: 10px;
-            display: none;
-        }
-        
         .leaflet-marker-icon {
             background: none !important;
             border: none !important;
@@ -259,7 +252,7 @@
             th, td { padding: 6px 4px; font-size: 10px; }
             .tab-content { padding: 10px; }
             #map { height: 350px; }
-            .admin-controls { flex-direction: column; align-items: stretch; }
+            .edit-input { width: 50px; }
         }
         
         @media (max-width: 480px) {
@@ -289,7 +282,6 @@
         <div class="tab-buttons">
             <button class="tab-btn active" onclick="switchTab('map')">🗺️ Harita</button>
             <button class="tab-btn" onclick="switchTab('table')">📋 Tablo</button>
-            <button class="tab-btn" onclick="switchTab('admin')">⚙️ Yönetim</button>
         </div>
         
         <div id="mapTab" class="tab-content active">
@@ -309,29 +301,19 @@
             <div class="table-container">
                 <div id="loadingMessage" class="loading">🔄 Veriler yükleniyor...</div>
                 <table id="deviceTable" style="display:none">
-                    <thead><tr><th>Cihaz ID</th><th>Sıcaklık</th><th>Nem</th><th>Ateş</th><th>Konum</th><th>Zaman</th></tr></thead>
+                    <thead>
+                        <tr>
+                            <th>Cihaz ID</th>
+                            <th>Sıcaklık</th>
+                            <th>Nem</th>
+                            <th>Ateş</th>
+                            <th>Konum</th>
+                            <th>Zaman</th>
+                            <th>İşlem</th>
+                        </tr>
+                    </thead>
                     <tbody id="tableBody"></tbody>
                 </table>
-            </div>
-        </div>
-        
-        <div id="adminTab" class="tab-content">
-            <div class="admin-panel">
-                <h3>📡 Cihaz Verilerini Güncelle</h3>
-                <div class="admin-controls">
-                    <select id="deviceSelect">
-                        <option value="">Cihaz Seçin...</option>
-                    </select>
-                    <input type="number" id="tempValue" placeholder="Sıcaklık (°C)" step="0.1">
-                    <input type="number" id="fireValue" placeholder="Ateş Değeri (0-100)" step="1" min="0" max="100">
-                    <button onclick="updateDeviceData()">💾 Güncelle</button>
-                    <button onclick="createTestData()">🧪 Test Verisi Ekle</button>
-                </div>
-                <div id="updateMessage" class="update-success"></div>
-                <div id="errorMessage" class="update-error"></div>
-                <div style="margin-top: 15px; padding: 10px; background: #e9ecef; border-radius: 6px; font-size: 12px;">
-                    <strong>ℹ️ Bilgi:</strong> Sıcaklık 40°C üzeri ve Ateş 50 üzeri alarm durumunu tetikler
-                </div>
             </div>
         </div>
     </div>
@@ -344,6 +326,7 @@
         const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im53Z2VybW1rbmdraXFrbnBxbmtrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcxNDI1MzYsImV4cCI6MjA5MjcxODUzNn0.PIEZZetCgFHCUcRiswgpjFzITAVgqRN4ViSPkRC5d1U';
         
         let supabaseClient = null, realtimeChannel = null, mapInstance = null, mapMarkers = [], alarmRings = [], devicesData = [];
+        let editingRow = null;
         
         function formatDate(d) { if(!d) return '-'; try{ return new Date(d).toLocaleString('tr-TR',{timeZone:'Europe/Istanbul',day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit'}); }catch(e){ return d; } }
         
@@ -402,8 +385,6 @@
         }
         
         function initMap(devices) {
-            console.log('initMap çağrıldı, cihaz sayısı:', devices.length);
-            
             if(!mapInstance) {
                 mapInstance = L.map('map').setView([39.0, 35.0], 6);
                 L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
@@ -469,7 +450,6 @@
                 }
             });
             
-            console.log('Aktif marker sayısı:', active);
             document.getElementById('activeOnMap').textContent = active;
             
             if (bounds.length > 0) {
@@ -477,49 +457,106 @@
             }
         }
         
-        // SUPABASE UPDATE FONKSİYONU
-        async function updateDeviceData() {
-            const deviceId = document.getElementById('deviceSelect').value;
-            const temperature = parseFloat(document.getElementById('tempValue').value);
-            const fire = parseInt(document.getElementById('fireValue').value);
-            
-            if (!deviceId) {
-                showMessage('Lütfen bir cihaz seçin!', 'error');
-                return;
+        // Düzenleme moduna geç
+        function editDevice(deviceId, currentTemp, currentFire) {
+            if (editingRow) {
+                cancelEdit();
             }
             
-            if (isNaN(temperature) && isNaN(fire)) {
-                showMessage('Lütfen sıcaklık veya ateş değeri girin!', 'error');
+            const row = document.querySelector(`tr[data-device-id="${deviceId}"]`);
+            if (!row) return;
+            
+            editingRow = row;
+            const tempCell = row.cells[1];
+            const fireCell = row.cells[3];
+            const actionCell = row.cells[6];
+            
+            // Mevcut değerleri sakla
+            const oldTemp = currentTemp;
+            const oldFire = currentFire;
+            
+            // Düzenleme inputları oluştur
+            tempCell.innerHTML = `<input type="number" id="editTemp" class="edit-input" value="${oldTemp}" step="0.1"> °C`;
+            fireCell.innerHTML = `<input type="number" id="editFire" class="edit-input" value="${oldFire}" step="1" min="0" max="100">`;
+            
+            actionCell.innerHTML = `
+                <button class="save-btn" onclick="saveDevice('${deviceId}')">💾 Kaydet</button>
+                <button class="cancel-btn" onclick="cancelEdit()">❌ İptal</button>
+            `;
+        }
+        
+        // Düzenlemeyi iptal et
+        function cancelEdit() {
+            if (!editingRow) return;
+            refreshData(); // Verileri yeniden yükle
+            editingRow = null;
+        }
+        
+        // Değişiklikleri kaydet
+        async function saveDevice(deviceId) {
+            const newTemp = parseFloat(document.getElementById('editTemp').value);
+            const newFire = parseInt(document.getElementById('editFire').value);
+            
+            if (isNaN(newTemp) && isNaN(newFire)) {
+                alert('Lütfen geçerli değerler girin!');
                 return;
             }
             
             const updateData = {};
-            if (!isNaN(temperature)) updateData.temperature = temperature;
-            if (!isNaN(fire)) updateData.fire = fire;
+            if (!isNaN(newTemp)) updateData.temperature = newTemp;
+            if (!isNaN(newFire)) updateData.fire = newFire;
             updateData.timestamp = new Date().toISOString();
             
             try {
-                const { data, error } = await supabaseClient
+                const { error } = await supabaseClient
                     .from('device_data')
                     .update(updateData)
-                    .eq('device_id', deviceId)
-                    .select();
+                    .eq('device_id', deviceId);
                 
                 if (error) throw error;
                 
-                showMessage(`✅ ${deviceId} başarıyla güncellendi!`, 'success');
-                document.getElementById('tempValue').value = '';
-                document.getElementById('fireValue').value = '';
+                // Başarılı mesajı göster
+                showToast(`✅ ${deviceId} başarıyla güncellendi!`, 'success');
+                
+                // Düzenleme modundan çık ve verileri yenile
+                editingRow = null;
                 refreshData();
                 
             } catch (error) {
                 console.error('Güncelleme hatası:', error);
-                showMessage(`❌ Güncelleme başarısız: ${error.message}`, 'error');
+                showToast(`❌ Güncelleme başarısız: ${error.message}`, 'error');
             }
+        }
+        
+        // Toast mesajı göster
+        function showToast(message, type) {
+            const toast = document.createElement('div');
+            toast.style.position = 'fixed';
+            toast.style.bottom = '80px';
+            toast.style.right = '20px';
+            toast.style.backgroundColor = type === 'success' ? '#28a745' : '#dc3545';
+            toast.style.color = 'white';
+            toast.style.padding = '12px 20px';
+            toast.style.borderRadius = '8px';
+            toast.style.fontSize = '14px';
+            toast.style.fontWeight = 'bold';
+            toast.style.zIndex = '2000';
+            toast.style.boxShadow = '0 2px 10px rgba(0,0,0,0.2)';
+            toast.style.animation = 'slideIn 0.3s ease';
+            toast.textContent = message;
+            
+            document.body.appendChild(toast);
+            
+            setTimeout(() => {
+                toast.style.animation = 'slideOut 0.3s ease';
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
         }
         
         // Test verisi ekleme fonksiyonu
         async function createTestData() {
+            if (!confirm('5 adet test cihazı eklenecek. Devam etmek istiyor musunuz?')) return;
+            
             const testDevices = [
                 { device_id: 'SENSOR_001', temperature: 42.5, fire: 65, latitude: 40.1234, longitude: 32.5678, humidity: 25 },
                 { device_id: 'SENSOR_002', temperature: 38.2, fire: 30, latitude: 39.8765, longitude: 33.1234, humidity: 40 },
@@ -537,40 +574,13 @@
                     }]);
                 
                 if (error) {
-                    console.error('Test verisi ekleme hatası:', error);
-                    showMessage('❌ Test verisi eklenirken hata oluştu!', 'error');
+                    showToast('❌ Test verisi eklenirken hata oluştu!', 'error');
                     return;
                 }
             }
             
-            showMessage('✅ 5 adet test cihazı başarıyla eklendi!', 'success');
+            showToast('✅ 5 adet test cihazı başarıyla eklendi!', 'success');
             refreshData();
-        }
-        
-        function showMessage(message, type) {
-            const successDiv = document.getElementById('updateMessage');
-            const errorDiv = document.getElementById('errorMessage');
-            
-            if (type === 'success') {
-                successDiv.textContent = message;
-                successDiv.style.display = 'block';
-                setTimeout(() => { successDiv.style.display = 'none'; }, 3000);
-            } else {
-                errorDiv.textContent = message;
-                errorDiv.style.display = 'block';
-                setTimeout(() => { errorDiv.style.display = 'none'; }, 3000);
-            }
-        }
-        
-        function updateDeviceSelect(devices) {
-            const select = document.getElementById('deviceSelect');
-            select.innerHTML = '<option value="">Cihaz Seçin...</option>';
-            devices.forEach(device => {
-                const option = document.createElement('option');
-                option.value = device.device_id;
-                option.textContent = `${device.device_id} (${device.temperature}°C, Ateş:${device.fire})`;
-                select.appendChild(option);
-            });
         }
         
         async function fetchData() {
@@ -619,13 +629,11 @@
                 const devices = await fetchData();
                 devicesData = devices;
                 
-                updateDeviceSelect(devices);
-                
                 const loadingDiv = document.getElementById('loadingMessage');
                 const table = document.getElementById('deviceTable');
                 
                 if (devices.length === 0) {
-                    loadingDiv.innerHTML = '📭 Henüz veri yok';
+                    loadingDiv.innerHTML = '📭 Henüz veri yok <button onclick="createTestData()" style="margin-left:10px;padding:5px 10px;background:#667eea;color:white;border:none;border-radius:4px;cursor:pointer;">➕ Test Verisi Ekle</button>';
                     loadingDiv.style.display = 'block';
                     table.style.display = 'none';
                 } else {
@@ -639,14 +647,19 @@
                         const fireStyle = device.fire > 50 ? 'color:#ff6600;font-weight:bold' : '';
                         const fireText = device.fire + (device.fire > 50 ? ' 🔥' : '');
                         
-                        return `<tr>
-                            <td><b>${escapeHtml(device.device_id)}</b></td>
-                            <td><span style="${tempStyle}">${device.temperature || '-'}°C</span></td>
-                            <td>${device.humidity || '-'}%</td>
-                            <td><span style="${fireStyle}">${fireText}</span></td>
-                            <td>${device.latitude || '-'}, ${device.longitude || '-'}</td>
-                            <td>${formatDate(device.timestamp)}</td>
-                        </tr>`;
+                        return `
+                            <tr data-device-id="${escapeHtml(device.device_id)}">
+                                <td><b>${escapeHtml(device.device_id)}</b></td>
+                                <td><span style="${tempStyle}">${device.temperature || '-'}°C</span></td>
+                                <td>${device.humidity || '-'}%</td>
+                                <td><span style="${fireStyle}">${fireText}</span></td>
+                                <td>${device.latitude || '-'}, ${device.longitude || '-'}</td>
+                                <td>${formatDate(device.timestamp)}</td>
+                                <td>
+                                    <button class="edit-btn" onclick="editDevice('${escapeHtml(device.device_id)}', ${device.temperature || 0}, ${device.fire || 0})">✏️ Düzenle</button>
+                                </td>
+                            </tr>
+                        `;
                     }).join('');
                 }
                 
@@ -657,6 +670,9 @@
                 document.getElementById('totalDevices').textContent = devices.length;
                 document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString('tr-TR');
                 checkAlarm(devices);
+                
+                // Düzenleme modunu temizle
+                editingRow = null;
                 
             } catch (error) {
                 console.error('Yenileme hatası:', error);
@@ -687,21 +703,14 @@
                 document.querySelector('.tab-btn:first-child').classList.add('active');
                 document.getElementById('mapTab').classList.add('active');
                 document.getElementById('tableTab').classList.remove('active');
-                document.getElementById('adminTab').classList.remove('active');
                 setTimeout(() => {
                     if (mapInstance) mapInstance.invalidateSize();
                     initMap(devicesData);
                 }, 100);
-            } else if (tab === 'admin') {
-                document.querySelector('.tab-btn:last-child').classList.add('active');
-                document.getElementById('adminTab').classList.add('active');
-                document.getElementById('mapTab').classList.remove('active');
-                document.getElementById('tableTab').classList.remove('active');
             } else {
-                document.querySelector('.tab-btn:nth-child(2)').classList.add('active');
+                document.querySelector('.tab-btn:last-child').classList.add('active');
                 document.getElementById('tableTab').classList.add('active');
                 document.getElementById('mapTab').classList.remove('active');
-                document.getElementById('adminTab').classList.remove('active');
             }
         }
         
@@ -740,6 +749,20 @@
                 console.error('Realtime kurulum hatası:', error);
             }
         }
+        
+        // CSS animasyonları ekle
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes slideIn {
+                from { transform: translateX(100%); opacity: 0; }
+                to { transform: translateX(0); opacity: 1; }
+            }
+            @keyframes slideOut {
+                from { transform: translateX(0); opacity: 1; }
+                to { transform: translateX(100%); opacity: 0; }
+            }
+        `;
+        document.head.appendChild(style);
         
         document.addEventListener('DOMContentLoaded', () => {
             refreshData();
