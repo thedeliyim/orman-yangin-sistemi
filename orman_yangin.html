@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-    <title>Orman Yangın İzleme Sistemi</title>
+    <title>Orman Yangın İzleme Sistemi - Yönetim Paneli</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
@@ -169,13 +169,64 @@
         .legend-item { display: flex; align-items: center; gap: 5px; font-size: 10px; }
         .legend-color { width: 12px; height: 12px; border-radius: 50%; border: 1px solid white; box-shadow: 0 1px 2px rgba(0,0,0,0.2); }
         
-        /* SADECE Leaflet'in varsayılan marker gölgesini ve arkaplanını kaldır */
+        /* Yönetim Panel Stilleri */
+        .admin-panel {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 12px;
+            margin-bottom: 15px;
+        }
+        
+        .admin-controls {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+            margin-top: 10px;
+        }
+        
+        .admin-controls select, .admin-controls input {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+        
+        .admin-controls button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        
+        .admin-controls button:hover { background: #5a67d8; }
+        
+        .update-success {
+            background: #28a745;
+            color: white;
+            padding: 10px;
+            border-radius: 6px;
+            margin-top: 10px;
+            display: none;
+        }
+        
+        .update-error {
+            background: #dc3545;
+            color: white;
+            padding: 10px;
+            border-radius: 6px;
+            margin-top: 10px;
+            display: none;
+        }
+        
         .leaflet-marker-icon {
             background: none !important;
             border: none !important;
         }
         
-        /* Marker'ın kendi div'i görünsün */
         .custom-marker {
             background: transparent !important;
         }
@@ -208,6 +259,7 @@
             th, td { padding: 6px 4px; font-size: 10px; }
             .tab-content { padding: 10px; }
             #map { height: 350px; }
+            .admin-controls { flex-direction: column; align-items: stretch; }
         }
         
         @media (max-width: 480px) {
@@ -237,6 +289,7 @@
         <div class="tab-buttons">
             <button class="tab-btn active" onclick="switchTab('map')">🗺️ Harita</button>
             <button class="tab-btn" onclick="switchTab('table')">📋 Tablo</button>
+            <button class="tab-btn" onclick="switchTab('admin')">⚙️ Yönetim</button>
         </div>
         
         <div id="mapTab" class="tab-content active">
@@ -259,6 +312,26 @@
                     <thead><tr><th>Cihaz ID</th><th>Sıcaklık</th><th>Nem</th><th>Ateş</th><th>Konum</th><th>Zaman</th></tr></thead>
                     <tbody id="tableBody"></tbody>
                 </table>
+            </div>
+        </div>
+        
+        <div id="adminTab" class="tab-content">
+            <div class="admin-panel">
+                <h3>📡 Cihaz Verilerini Güncelle</h3>
+                <div class="admin-controls">
+                    <select id="deviceSelect">
+                        <option value="">Cihaz Seçin...</option>
+                    </select>
+                    <input type="number" id="tempValue" placeholder="Sıcaklık (°C)" step="0.1">
+                    <input type="number" id="fireValue" placeholder="Ateş Değeri (0-100)" step="1" min="0" max="100">
+                    <button onclick="updateDeviceData()">💾 Güncelle</button>
+                    <button onclick="createTestData()">🧪 Test Verisi Ekle</button>
+                </div>
+                <div id="updateMessage" class="update-success"></div>
+                <div id="errorMessage" class="update-error"></div>
+                <div style="margin-top: 15px; padding: 10px; background: #e9ecef; border-radius: 6px; font-size: 12px;">
+                    <strong>ℹ️ Bilgi:</strong> Sıcaklık 40°C üzeri ve Ateş 50 üzeri alarm durumunu tetikler
+                </div>
             </div>
         </div>
     </div>
@@ -291,7 +364,6 @@
         }
         
         function createCustomIcon(color, size, emoji, hasFire, isHigh) {
-            // Basit HTML - dışarıda hiçbir şey yok, sadece daire
             const html = '<div style="' +
                 'width:' + size + 'px;' +
                 'height:' + size + 'px;' +
@@ -405,6 +477,102 @@
             }
         }
         
+        // SUPABASE UPDATE FONKSİYONU
+        async function updateDeviceData() {
+            const deviceId = document.getElementById('deviceSelect').value;
+            const temperature = parseFloat(document.getElementById('tempValue').value);
+            const fire = parseInt(document.getElementById('fireValue').value);
+            
+            if (!deviceId) {
+                showMessage('Lütfen bir cihaz seçin!', 'error');
+                return;
+            }
+            
+            if (isNaN(temperature) && isNaN(fire)) {
+                showMessage('Lütfen sıcaklık veya ateş değeri girin!', 'error');
+                return;
+            }
+            
+            const updateData = {};
+            if (!isNaN(temperature)) updateData.temperature = temperature;
+            if (!isNaN(fire)) updateData.fire = fire;
+            updateData.timestamp = new Date().toISOString();
+            
+            try {
+                const { data, error } = await supabaseClient
+                    .from('device_data')
+                    .update(updateData)
+                    .eq('device_id', deviceId)
+                    .select();
+                
+                if (error) throw error;
+                
+                showMessage(`✅ ${deviceId} başarıyla güncellendi!`, 'success');
+                document.getElementById('tempValue').value = '';
+                document.getElementById('fireValue').value = '';
+                refreshData();
+                
+            } catch (error) {
+                console.error('Güncelleme hatası:', error);
+                showMessage(`❌ Güncelleme başarısız: ${error.message}`, 'error');
+            }
+        }
+        
+        // Test verisi ekleme fonksiyonu
+        async function createTestData() {
+            const testDevices = [
+                { device_id: 'SENSOR_001', temperature: 42.5, fire: 65, latitude: 40.1234, longitude: 32.5678, humidity: 25 },
+                { device_id: 'SENSOR_002', temperature: 38.2, fire: 30, latitude: 39.8765, longitude: 33.1234, humidity: 40 },
+                { device_id: 'SENSOR_003', temperature: 28.5, fire: 10, latitude: 38.4567, longitude: 31.7890, humidity: 55 },
+                { device_id: 'SENSOR_004', temperature: 45.0, fire: 85, latitude: 40.9876, longitude: 34.2345, humidity: 20 },
+                { device_id: 'SENSOR_005', temperature: 32.0, fire: 15, latitude: 39.6543, longitude: 32.9012, humidity: 48 }
+            ];
+            
+            for (const device of testDevices) {
+                const { error } = await supabaseClient
+                    .from('device_data')
+                    .insert([{
+                        ...device,
+                        timestamp: new Date().toISOString()
+                    }]);
+                
+                if (error) {
+                    console.error('Test verisi ekleme hatası:', error);
+                    showMessage('❌ Test verisi eklenirken hata oluştu!', 'error');
+                    return;
+                }
+            }
+            
+            showMessage('✅ 5 adet test cihazı başarıyla eklendi!', 'success');
+            refreshData();
+        }
+        
+        function showMessage(message, type) {
+            const successDiv = document.getElementById('updateMessage');
+            const errorDiv = document.getElementById('errorMessage');
+            
+            if (type === 'success') {
+                successDiv.textContent = message;
+                successDiv.style.display = 'block';
+                setTimeout(() => { successDiv.style.display = 'none'; }, 3000);
+            } else {
+                errorDiv.textContent = message;
+                errorDiv.style.display = 'block';
+                setTimeout(() => { errorDiv.style.display = 'none'; }, 3000);
+            }
+        }
+        
+        function updateDeviceSelect(devices) {
+            const select = document.getElementById('deviceSelect');
+            select.innerHTML = '<option value="">Cihaz Seçin...</option>';
+            devices.forEach(device => {
+                const option = document.createElement('option');
+                option.value = device.device_id;
+                option.textContent = `${device.device_id} (${device.temperature}°C, Ateş:${device.fire})`;
+                select.appendChild(option);
+            });
+        }
+        
         async function fetchData() {
             if (!supabaseClient) {
                 supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -451,7 +619,7 @@
                 const devices = await fetchData();
                 devicesData = devices;
                 
-                console.log('Veriler çekildi:', devices.length);
+                updateDeviceSelect(devices);
                 
                 const loadingDiv = document.getElementById('loadingMessage');
                 const table = document.getElementById('deviceTable');
@@ -519,14 +687,21 @@
                 document.querySelector('.tab-btn:first-child').classList.add('active');
                 document.getElementById('mapTab').classList.add('active');
                 document.getElementById('tableTab').classList.remove('active');
+                document.getElementById('adminTab').classList.remove('active');
                 setTimeout(() => {
                     if (mapInstance) mapInstance.invalidateSize();
                     initMap(devicesData);
                 }, 100);
-            } else {
+            } else if (tab === 'admin') {
                 document.querySelector('.tab-btn:last-child').classList.add('active');
+                document.getElementById('adminTab').classList.add('active');
+                document.getElementById('mapTab').classList.remove('active');
+                document.getElementById('tableTab').classList.remove('active');
+            } else {
+                document.querySelector('.tab-btn:nth-child(2)').classList.add('active');
                 document.getElementById('tableTab').classList.add('active');
                 document.getElementById('mapTab').classList.remove('active');
+                document.getElementById('adminTab').classList.remove('active');
             }
         }
         
