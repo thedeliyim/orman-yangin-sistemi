@@ -168,19 +168,19 @@
         .legend-item { display: flex; align-items: center; gap: 5px; font-size: 10px; }
         .legend-color { width: 12px; height: 12px; border-radius: 50%; border: 1px solid white; box-shadow: 0 1px 2px rgba(0,0,0,0.2); }
         
-        /* SADECE marker ikonlarının dış çerçevesini kaldır, içeriğe dokunma */
-        .leaflet-marker-icon.custom-marker {
-            background: transparent !important;
+        /* SADECE Leaflet'in varsayılan marker gölgesini ve arkaplanını kaldır */
+        .leaflet-marker-icon {
+            background: none !important;
             border: none !important;
-            outline: none !important;
-            box-shadow: none !important;
         }
         
-        /* Alarm halkaları için */
-        .leaflet-marker-icon.ring-marker {
+        /* Marker'ın kendi div'i görünsün */
+        .custom-marker {
             background: transparent !important;
-            border: none !important;
-            box-shadow: none !important;
+        }
+        
+        .ring-marker {
+            background: transparent !important;
         }
         
         @keyframes alarm-ring-fast {
@@ -289,27 +289,23 @@
             else document.body.classList.remove('fire-alarm');
         }
         
-        // Çerçevesiz ve transparan arkaplanlı marker
         function createCustomIcon(color, size, emoji, hasFire, isHigh) {
-            const html = `
-                <div style="
-                    width: ${size}px;
-                    height: ${size}px;
-                    background: ${color};
-                    border-radius: 50%;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    font-size: ${Math.max(size-12, 14)}px;
-                    font-weight: bold;
-                    box-shadow: 0 2px 6px rgba(0,0,0,0.3);
-                    animation: ${(hasFire || isHigh) ? 'pulse 0.8s infinite' : 'none'};
-                    border: 2px solid white;
-                    box-sizing: border-box;
-                ">
-                    ${emoji}
-                </div>
-            `;
+            // Basit HTML - dışarıda hiçbir şey yok, sadece daire
+            const html = '<div style="' +
+                'width:' + size + 'px;' +
+                'height:' + size + 'px;' +
+                'background:' + color + ';' +
+                'border-radius:50%;' +
+                'display:flex;' +
+                'align-items:center;' +
+                'justify-content:center;' +
+                'font-size:' + (size-10) + 'px;' +
+                'font-weight:bold;' +
+                'box-shadow:0 2px 4px rgba(0,0,0,0.2);' +
+                'border:2px solid white;' +
+                (hasFire || isHigh ? 'animation:pulse 0.8s infinite;' : '') +
+                '">' + emoji + '</div>';
+            
             return L.divIcon({
                 html: html,
                 className: 'custom-marker',
@@ -319,30 +315,12 @@
         }
         
         function createRingIcon(ringColor) {
-            const ringHtml = `
-                <div style="
-                    position: relative;
-                    width: 60px;
-                    height: 60px;
-                    background: transparent;
-                ">
-                    <div style="
-                        position: absolute;
-                        top: 50%;
-                        left: 50%;
-                        width: 40px;
-                        height: 40px;
-                        margin: -20px 0 0 -20px;
-                        border-radius: 50%;
-                        background: radial-gradient(circle, ${ringColor}80 0%, ${ringColor}30 50%, transparent 80%);
-                        border: 2px solid ${ringColor};
-                        animation: alarm-ring-fast 1.2s infinite;
-                        pointer-events: none;
-                    "></div>
-                </div>
-            `;
+            const html = '<div style="position:relative;width:60px;height:60px;">' +
+                '<div style="position:absolute;top:50%;left:50%;width:40px;height:40px;margin:-20px 0 0 -20px;border-radius:50%;background:radial-gradient(circle,' + ringColor + '80 0%,' + ringColor + '30 50%,transparent 80%);border:2px solid ' + ringColor + ';animation:alarm-ring-fast 1.2s infinite;pointer-events:none;"></div>' +
+                '</div>';
+            
             return L.divIcon({
-                html: ringHtml,
+                html: html,
                 className: 'ring-marker',
                 iconSize: [60, 60],
                 popupAnchor: [0, -30],
@@ -351,6 +329,8 @@
         }
         
         function initMap(devices) {
+            console.log('initMap çağrıldı, cihaz sayısı:', devices.length);
+            
             if(!mapInstance) {
                 mapInstance = L.map('map').setView([39.0, 35.0], 6);
                 L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
@@ -360,7 +340,6 @@
                 }).addTo(mapInstance);
             }
             
-            // Temizlik
             mapMarkers.forEach(m => mapInstance.removeLayer(m));
             alarmRings.forEach(r => mapInstance.removeLayer(r));
             mapMarkers = [];
@@ -408,7 +387,6 @@
                     mapMarkers.push(marker);
                     bounds.push([device.latitude, device.longitude]);
                     
-                    // Alarm halkası
                     if (hasFire || isHigh) {
                         const ringColor = hasFire ? '#ff6600' : '#dc3545';
                         const ringIcon = createRingIcon(ringColor);
@@ -418,6 +396,7 @@
                 }
             });
             
+            console.log('Aktif marker sayısı:', active);
             document.getElementById('activeOnMap').textContent = active;
             
             if (bounds.length > 0) {
@@ -439,7 +418,6 @@
                 if (error) throw error;
                 if (!data || data.length === 0) return [];
                 
-                // En son verileri al
                 const latestMap = new Map();
                 for (const record of data) {
                     if (!latestMap.has(record.device_id)) {
@@ -471,6 +449,8 @@
             try {
                 const devices = await fetchData();
                 devicesData = devices;
+                
+                console.log('Veriler çekildi:', devices.length);
                 
                 const loadingDiv = document.getElementById('loadingMessage');
                 const table = document.getElementById('deviceTable');
@@ -585,7 +565,6 @@
             }
         }
         
-        // Sayfa yüklendiğinde
         document.addEventListener('DOMContentLoaded', () => {
             refreshData();
             setupRealtime();
