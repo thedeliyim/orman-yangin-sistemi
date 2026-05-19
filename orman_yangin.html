@@ -244,6 +244,16 @@
             100% { transform: scale(1.5); opacity: 0; }
         }
         
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        
+        @keyframes slideOut {
+            from { transform: translateX(0); opacity: 1; }
+            to { transform: translateX(100%); opacity: 0; }
+        }
+        
         @media (max-width: 768px) {
             body { padding: 5px; }
             .header h1 { font-size: 1.3em; }
@@ -471,13 +481,9 @@
             const fireCell = row.cells[3];
             const actionCell = row.cells[6];
             
-            // Mevcut değerleri sakla
-            const oldTemp = currentTemp;
-            const oldFire = currentFire;
-            
             // Düzenleme inputları oluştur
-            tempCell.innerHTML = `<input type="number" id="editTemp" class="edit-input" value="${oldTemp}" step="0.1"> °C`;
-            fireCell.innerHTML = `<input type="number" id="editFire" class="edit-input" value="${oldFire}" step="1" min="0" max="100">`;
+            tempCell.innerHTML = `<input type="number" id="editTemp" class="edit-input" value="${currentTemp}" step="0.1"> °C`;
+            fireCell.innerHTML = `<input type="number" id="editFire" class="edit-input" value="${currentFire}" step="1" min="0" max="100">`;
             
             actionCell.innerHTML = `
                 <button class="save-btn" onclick="saveDevice('${deviceId}')">💾 Kaydet</button>
@@ -488,17 +494,42 @@
         // Düzenlemeyi iptal et
         function cancelEdit() {
             if (!editingRow) return;
-            refreshData(); // Verileri yeniden yükle
+            refreshData();
             editingRow = null;
         }
         
-        // Değişiklikleri kaydet
+        // En son kaydın ID'sini bulan yardımcı fonksiyon
+        async function getLatestRecordId(deviceId) {
+            const { data, error } = await supabaseClient
+                .from('device_data')
+                .select('id')
+                .eq('device_id', deviceId)
+                .order('timestamp', { ascending: false })
+                .limit(1);
+            
+            if (error || !data || data.length === 0) {
+                return null;
+            }
+            return data[0].id;
+        }
+        
+        // Değişiklikleri kaydet (DÜZELTİLMİŞ VERSİYON)
         async function saveDevice(deviceId) {
             const newTemp = parseFloat(document.getElementById('editTemp').value);
             const newFire = parseInt(document.getElementById('editFire').value);
             
             if (isNaN(newTemp) && isNaN(newFire)) {
-                alert('Lütfen geçerli değerler girin!');
+                showToast('Lütfen geçerli değerler girin!', 'error');
+                return;
+            }
+            
+            showToast('🔄 Güncelleniyor...', 'info');
+            
+            // En son kaydın ID'sini bul
+            const recordId = await getLatestRecordId(deviceId);
+            
+            if (!recordId) {
+                showToast(`❌ ${deviceId} için kayıt bulunamadı!`, 'error');
                 return;
             }
             
@@ -508,17 +539,15 @@
             updateData.timestamp = new Date().toISOString();
             
             try {
+                // Benzersiz ID'ye göre güncelle
                 const { error } = await supabaseClient
                     .from('device_data')
                     .update(updateData)
-                    .eq('device_id', deviceId);
+                    .eq('id', recordId);
                 
                 if (error) throw error;
                 
-                // Başarılı mesajı göster
                 showToast(`✅ ${deviceId} başarıyla güncellendi!`, 'success');
-                
-                // Düzenleme modundan çık ve verileri yenile
                 editingRow = null;
                 refreshData();
                 
@@ -534,8 +563,8 @@
             toast.style.position = 'fixed';
             toast.style.bottom = '80px';
             toast.style.right = '20px';
-            toast.style.backgroundColor = type === 'success' ? '#28a745' : '#dc3545';
-            toast.style.color = 'white';
+            toast.style.backgroundColor = type === 'success' ? '#28a745' : (type === 'error' ? '#dc3545' : '#ffc107');
+            toast.style.color = type === 'info' ? '#333' : 'white';
             toast.style.padding = '12px 20px';
             toast.style.borderRadius = '8px';
             toast.style.fontSize = '14px';
@@ -564,6 +593,8 @@
                 { device_id: 'SENSOR_004', temperature: 45.0, fire: 85, latitude: 40.9876, longitude: 34.2345, humidity: 20 },
                 { device_id: 'SENSOR_005', temperature: 32.0, fire: 15, latitude: 39.6543, longitude: 32.9012, humidity: 48 }
             ];
+            
+            showToast('🔄 Test verileri ekleniyor...', 'info');
             
             for (const device of testDevices) {
                 const { error } = await supabaseClient
@@ -657,8 +688,8 @@
                                 <td>${formatDate(device.timestamp)}</td>
                                 <td>
                                     <button class="edit-btn" onclick="editDevice('${escapeHtml(device.device_id)}', ${device.temperature || 0}, ${device.fire || 0})">✏️ Düzenle</button>
-                                </td>
-                            </tr>
+                                 </td>
+                             </tr>
                         `;
                     }).join('');
                 }
@@ -671,7 +702,6 @@
                 document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString('tr-TR');
                 checkAlarm(devices);
                 
-                // Düzenleme modunu temizle
                 editingRow = null;
                 
             } catch (error) {
@@ -749,20 +779,6 @@
                 console.error('Realtime kurulum hatası:', error);
             }
         }
-        
-        // CSS animasyonları ekle
-        const style = document.createElement('style');
-        style.textContent = `
-            @keyframes slideIn {
-                from { transform: translateX(100%); opacity: 0; }
-                to { transform: translateX(0); opacity: 1; }
-            }
-            @keyframes slideOut {
-                from { transform: translateX(0); opacity: 1; }
-                to { transform: translateX(100%); opacity: 0; }
-            }
-        `;
-        document.head.appendChild(style);
         
         document.addEventListener('DOMContentLoaded', () => {
             refreshData();
