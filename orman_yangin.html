@@ -111,18 +111,6 @@
         td { padding: 8px; border-bottom: 1px solid #e0e0e0; }
         tr:hover { background: #f5f5f5; }
         
-        .status-active { color: #28a745; font-weight: bold; }
-        .status-inactive { color: #dc3545; font-weight: bold; }
-        .status-warning { color: #ffc107; font-weight: bold; }
-        
-        .badge {
-            display: inline-block;
-            padding: 2px 6px;
-            border-radius: 4px;
-            font-size: 10px;
-            font-weight: bold;
-        }
-        
         .refresh-btn {
             position: fixed;
             bottom: 20px;
@@ -180,35 +168,16 @@
         .legend-item { display: flex; align-items: center; gap: 5px; font-size: 10px; }
         .legend-color { width: 12px; height: 12px; border-radius: 50%; border: 1px solid white; box-shadow: 0 1px 2px rgba(0,0,0,0.2); }
         
-        /* ===== KRİTİK: Tüm marker elementlerinden çerçeve ve arkaplanı tamamen kaldır ===== */
-        .leaflet-marker-icon,
-        .leaflet-marker-icon.custom-marker,
-        .leaflet-marker-icon.ring-marker,
-        .leaflet-marker-icon > div,
-        img.leaflet-marker-icon,
-        div.leaflet-marker-icon {
+        /* SADECE marker ikonlarının dış çerçevesini kaldır, içeriğe dokunma */
+        .leaflet-marker-icon.custom-marker {
             background: transparent !important;
             border: none !important;
             outline: none !important;
-            box-shadow: none !important;
-            background-color: transparent !important;
-        }
-        
-        /* Marker içindeki tüm div'lerden de border kaldır */
-        .leaflet-marker-icon * {
-            border: none !important;
-            outline: none !important;
-        }
-        
-        /* Özel marker class'ı */
-        .custom-marker {
-            background: transparent !important;
-            border: none !important;
             box-shadow: none !important;
         }
         
         /* Alarm halkaları için */
-        .ring-marker {
+        .leaflet-marker-icon.ring-marker {
             background: transparent !important;
             border: none !important;
             box-shadow: none !important;
@@ -320,8 +289,8 @@
             else document.body.classList.remove('fire-alarm');
         }
         
-        // Tamamen transparan arka planlı ve çerçevesiz ikon
-        function createTransparentIcon(color, size, emoji, hasFire, isHigh) {
+        // Çerçevesiz ve transparan arkaplanlı marker
+        function createCustomIcon(color, size, emoji, hasFire, isHigh) {
             const html = `
                 <div style="
                     width: ${size}px;
@@ -333,8 +302,10 @@
                     justify-content: center;
                     font-size: ${Math.max(size-12, 14)}px;
                     font-weight: bold;
-                    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+                    box-shadow: 0 2px 6px rgba(0,0,0,0.3);
                     animation: ${(hasFire || isHigh) ? 'pulse 0.8s infinite' : 'none'};
+                    border: 2px solid white;
+                    box-sizing: border-box;
                 ">
                     ${emoji}
                 </div>
@@ -343,21 +314,25 @@
                 html: html,
                 className: 'custom-marker',
                 iconSize: [size, size],
-                popupAnchor: [0, -size/2],
-                tooltipAnchor: [0, -size/2]
+                popupAnchor: [0, -size/2]
             });
         }
         
         function createRingIcon(ringColor) {
             const ringHtml = `
-                <div style="position:relative; width:60px; height:60px;">
+                <div style="
+                    position: relative;
+                    width: 60px;
+                    height: 60px;
+                    background: transparent;
+                ">
                     <div style="
                         position: absolute;
                         top: 50%;
                         left: 50%;
-                        width: 34px;
-                        height: 34px;
-                        margin: -17px 0 0 -17px;
+                        width: 40px;
+                        height: 40px;
+                        margin: -20px 0 0 -20px;
                         border-radius: 50%;
                         background: radial-gradient(circle, ${ringColor}80 0%, ${ringColor}30 50%, transparent 80%);
                         border: 2px solid ${ringColor};
@@ -377,14 +352,15 @@
         
         function initMap(devices) {
             if(!mapInstance) {
-                mapInstance = L.map('map').setView([39.0,35.0],6);
-                L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{
-                    attribution:'&copy; OSM',
-                    subdomains:'abcd',
-                    maxZoom:19
+                mapInstance = L.map('map').setView([39.0, 35.0], 6);
+                L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+                    attribution: '&copy; OpenStreetMap',
+                    subdomains: 'abcd',
+                    maxZoom: 19
                 }).addTo(mapInstance);
             }
             
+            // Temizlik
             mapMarkers.forEach(m => mapInstance.removeLayer(m));
             alarmRings.forEach(r => mapInstance.removeLayer(r));
             mapMarkers = [];
@@ -393,151 +369,234 @@
             let active = 0;
             let bounds = [];
             
-            devices.forEach(d => {
-                if(d.latitude && d.longitude && d.latitude!==0 && d.longitude!==0){
+            devices.forEach(device => {
+                if (device.latitude && device.longitude && device.latitude !== 0 && device.longitude !== 0) {
                     active++;
-                    const temp = d.temperature ?? 0;
-                    const fireVal = d.fire ?? 0;
+                    const temp = device.temperature || 0;
+                    const fireVal = device.fire || 0;
                     const isHigh = temp > 40;
                     const hasFire = fireVal > 50;
                     const isWarn = temp > 35 && !isHigh;
                     
                     let color = getMarkerColor(temp, fireVal);
-                    let size = hasFire ? 36 : (isHigh ? 32 : (isWarn ? 28 : 24));
-                    let emoji = hasFire ? '🔥' : (isHigh ? '⚠️' : (isWarn ? '🌡️' : ''));
+                    let size = hasFire ? 38 : (isHigh ? 34 : (isWarn ? 30 : 26));
+                    let emoji = hasFire ? '🔥' : (isHigh ? '⚠️' : (isWarn ? '🌡️' : '📍'));
                     
-                    const icon = createTransparentIcon(color, size, emoji, hasFire, isHigh);
+                    const icon = createCustomIcon(color, size, emoji, hasFire, isHigh);
                     
                     let warnHtml = '';
-                    if(hasFire) warnHtml = '<p style="color:#ff6600;font-weight:bold; margin-top:5px;">🔥 ATEŞ ALGILANDI!</p>';
-                    else if(isHigh) warnHtml = '<p style="color:red;font-weight:bold; margin-top:5px;">⚠️ YANGIN RİSKİ!</p>';
-                    else if(isWarn) warnHtml = '<p style="color:#ffc107;font-weight:bold; margin-top:5px;">🌡️ SICAKLIK UYARISI</p>';
+                    if (hasFire) warnHtml = '<p style="color:#ff6600;font-weight:bold;margin-top:5px;">🔥 ATEŞ ALGILANDI!</p>';
+                    else if (isHigh) warnHtml = '<p style="color:red;font-weight:bold;margin-top:5px;">⚠️ YANGIN RİSKİ!</p>';
+                    else if (isWarn) warnHtml = '<p style="color:#ffc107;font-weight:bold;margin-top:5px;">🌡️ SICAKLIK UYARISI</p>';
                     
                     const popupContent = `
                         <div style="min-width:220px">
-                            <b>📡 ${escapeHtml(d.device_id)}</b><hr/>
-                            <b>🌡️ Sıcaklık:</b> <span style="color:${temp>40?'red':(temp>35?'#ffc107':'')};font-weight:bold">${temp ?? '-'}°C</span><br/>
-                            <b>💧 Nem:</b> ${d.humidity ?? '-'}%<br/>
-                            <b>🔥 Ateş:</b> <span style="${fireVal>50?'color:#ff6600;font-weight:bold':''}">${fireVal ?? '-'} ${fireVal>50 ? 'ALARM!' : ''}</span><br/>
-                            <b>📍 Konum:</b> ${d.latitude}, ${d.longitude}<br/>
-                            <b>⏱️ Zaman:</b> ${formatDate(d.timestamp)}
+                            <b>📡 ${escapeHtml(device.device_id)}</b><hr/>
+                            <b>🌡️ Sıcaklık:</b> <span style="color:${temp > 40 ? 'red' : (temp > 35 ? '#ffc107' : '')};font-weight:bold">${temp}°C</span><br/>
+                            <b>💧 Nem:</b> ${device.humidity || '-'}%<br/>
+                            <b>🔥 Ateş:</b> <span style="${fireVal > 50 ? 'color:#ff6600;font-weight:bold' : ''}">${fireVal} ${fireVal > 50 ? '🔥 ALARM!' : ''}</span><br/>
+                            <b>📍 Konum:</b> ${device.latitude}, ${device.longitude}<br/>
+                            <b>⏱️ Zaman:</b> ${formatDate(device.timestamp)}
                             ${warnHtml}
                         </div>
                     `;
                     
-                    const marker = L.marker([d.latitude, d.longitude], { icon: icon, riseOnHover: true })
+                    const marker = L.marker([device.latitude, device.longitude], { icon: icon })
                         .bindPopup(popupContent)
                         .addTo(mapInstance);
                     
                     mapMarkers.push(marker);
-                    bounds.push([d.latitude, d.longitude]);
+                    bounds.push([device.latitude, device.longitude]);
                     
-                    if(hasFire || isHigh) {
+                    // Alarm halkası
+                    if (hasFire || isHigh) {
                         const ringColor = hasFire ? '#ff6600' : '#dc3545';
                         const ringIcon = createRingIcon(ringColor);
-                        const ringMarker = L.marker([d.latitude, d.longitude], { icon: ringIcon, interactive: false }).addTo(mapInstance);
+                        const ringMarker = L.marker([device.latitude, device.longitude], { icon: ringIcon, interactive: false }).addTo(mapInstance);
                         alarmRings.push(ringMarker);
                     }
                 }
             });
             
             document.getElementById('activeOnMap').textContent = active;
-            if(bounds.length) {
+            
+            if (bounds.length > 0) {
                 mapInstance.fitBounds(L.latLngBounds(bounds).pad(0.2));
-            } else {
-                mapInstance.setView([39.0, 35.0], 6);
             }
         }
         
         async function fetchData() {
-            if(!supabaseClient) supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-            try{
-                let {data, error} = await supabaseClient.from('device_data').select('*').order('timestamp',{ascending:false});
-                if(error) throw error;
-                if(!data || !data.length) return [];
-                let latest = new Map();
-                for(let rec of data) if(!latest.has(rec.device_id)) latest.set(rec.device_id, rec);
-                return Array.from(latest.values()).map(r=>({
+            if (!supabaseClient) {
+                supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+            }
+            
+            try {
+                const { data, error } = await supabaseClient
+                    .from('device_data')
+                    .select('*')
+                    .order('timestamp', { ascending: false });
+                
+                if (error) throw error;
+                if (!data || data.length === 0) return [];
+                
+                // En son verileri al
+                const latestMap = new Map();
+                for (const record of data) {
+                    if (!latestMap.has(record.device_id)) {
+                        latestMap.set(record.device_id, record);
+                    }
+                }
+                
+                return Array.from(latestMap.values()).map(r => ({
                     device_id: r.device_id,
                     temperature: r.temperature,
                     humidity: r.humidity,
                     latitude: r.latitude,
                     longitude: r.longitude,
-                    status: r.status||'unknown',
                     timestamp: r.timestamp,
                     fire: r.fire
                 }));
-            }catch(e){ console.error(e); throw e; }
+            } catch (error) {
+                console.error('Veri çekme hatası:', error);
+                throw error;
+            }
         }
         
         async function refreshData() {
-            let btn = document.querySelector('.refresh-btn'), orig = btn.textContent;
-            btn.textContent = '🔄 Yenileniyor...'; btn.disabled = true;
-            try{
-                let devices = await fetchData();
+            const btn = document.querySelector('.refresh-btn');
+            const originalText = btn.textContent;
+            btn.textContent = '🔄 Yenileniyor...';
+            btn.disabled = true;
+            
+            try {
+                const devices = await fetchData();
                 devicesData = devices;
-                let loading = document.getElementById('loadingMessage'), table = document.getElementById('deviceTable');
-                if(!devices.length){
-                    loading.innerHTML = '📭 Henüz veri yok'; loading.style.display='block'; table.style.display='none';
-                }else{
-                    loading.style.display='none'; table.style.display='table';
-                    document.getElementById('tableBody').innerHTML = devices.map(d=>{
-                        let tempStyle = d.temperature>40?'color:red;font-weight:bold':(d.temperature>35?'color:#ffc107;font-weight:bold':'');
-                        let fireStyle = d.fire>0?'color:#ff6600;font-weight:bold':'';
-                        let fireText = (d.fire ?? '-') + (d.fire>50 ? '🔥' : '');
+                
+                const loadingDiv = document.getElementById('loadingMessage');
+                const table = document.getElementById('deviceTable');
+                
+                if (devices.length === 0) {
+                    loadingDiv.innerHTML = '📭 Henüz veri yok';
+                    loadingDiv.style.display = 'block';
+                    table.style.display = 'none';
+                } else {
+                    loadingDiv.style.display = 'none';
+                    table.style.display = 'table';
+                    
+                    const tableBody = document.getElementById('tableBody');
+                    tableBody.innerHTML = devices.map(device => {
+                        const tempStyle = device.temperature > 40 ? 'color:red;font-weight:bold' : 
+                                       (device.temperature > 35 ? 'color:#ffc107;font-weight:bold' : '');
+                        const fireStyle = device.fire > 50 ? 'color:#ff6600;font-weight:bold' : '';
+                        const fireText = device.fire + (device.fire > 50 ? ' 🔥' : '');
+                        
                         return `<tr>
-                            <td><b>${escapeHtml(d.device_id)}</b></td>
-                            <td><span style="${tempStyle}">${d.temperature??'-'}°C</span></td>
-                            <td>${d.humidity??'-'}%</td>
+                            <td><b>${escapeHtml(device.device_id)}</b></td>
+                            <td><span style="${tempStyle}">${device.temperature || '-'}°C</span></td>
+                            <td>${device.humidity || '-'}%</td>
                             <td><span style="${fireStyle}">${fireText}</span></td>
-                            <td>${d.latitude??'-'}, ${d.longitude??'-'}</td>
-                            <td>${formatDate(d.timestamp)}</td>
+                            <td>${device.latitude || '-'}, ${device.longitude || '-'}</td>
+                            <td>${formatDate(device.timestamp)}</td>
                         </tr>`;
                     }).join('');
                 }
-                if(document.getElementById('mapTab').classList.contains('active')) initMap(devices);
+                
+                if (document.getElementById('mapTab').classList.contains('active')) {
+                    initMap(devices);
+                }
+                
                 document.getElementById('totalDevices').textContent = devices.length;
-                document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString('tr-TR',{timeZone:'Europe/Istanbul',hour:'2-digit',minute:'2-digit',second:'2-digit'});
+                document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString('tr-TR');
                 checkAlarm(devices);
-            }catch(e){
-                console.error(e);
+                
+            } catch (error) {
+                console.error('Yenileme hatası:', error);
                 document.getElementById('loadingMessage').innerHTML = '❌ Veri yüklenemedi!';
                 document.getElementById('loadingMessage').className = 'error-message';
-            }finally{ btn.textContent=orig; btn.disabled=false; }
+            } finally {
+                btn.textContent = originalText;
+                btn.disabled = false;
+            }
         }
         
-        function manualRefresh(){ refreshData(); let b=document.getElementById('realtimeBadge'); b.style.background='#ffc107'; b.innerHTML='🔄 Yenileniyor...'; setTimeout(()=>{ if(realtimeChannel?.state==='subscribed'){ b.style.background='#28a745'; b.innerHTML='🟢 Canlı Takip'; }},1500); }
+        function manualRefresh() {
+            refreshData();
+            const badge = document.getElementById('realtimeBadge');
+            badge.style.background = '#ffc107';
+            badge.innerHTML = '🔄 Yenileniyor...';
+            setTimeout(() => {
+                if (realtimeChannel?.state === 'subscribed') {
+                    badge.style.background = '#28a745';
+                    badge.innerHTML = '🟢 Canlı Takip';
+                }
+            }, 1500);
+        }
         
-        function switchTab(tab){
-            document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
-            if(tab==='map') document.querySelector('.tab-btn:first-child').classList.add('active');
-            else document.querySelector('.tab-btn:last-child').classList.add('active');
-            document.getElementById('mapTab').classList.remove('active');
-            document.getElementById('tableTab').classList.remove('active');
-            if(tab==='map'){
+        function switchTab(tab) {
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            if (tab === 'map') {
+                document.querySelector('.tab-btn:first-child').classList.add('active');
                 document.getElementById('mapTab').classList.add('active');
-                setTimeout(()=>{ 
-                    if(mapInstance) mapInstance.invalidateSize(); 
-                    initMap(devicesData); 
+                document.getElementById('tableTab').classList.remove('active');
+                setTimeout(() => {
+                    if (mapInstance) mapInstance.invalidateSize();
+                    initMap(devicesData);
                 }, 100);
-            }else document.getElementById('tableTab').classList.add('active');
+            } else {
+                document.querySelector('.tab-btn:last-child').classList.add('active');
+                document.getElementById('tableTab').classList.add('active');
+                document.getElementById('mapTab').classList.remove('active');
+            }
         }
         
-        function escapeHtml(t){ if(!t) return ''; let d=document.createElement('div'); d.textContent=t; return d.innerHTML; }
-        
-        function setupRealtime(){
-            try{
-                if(!supabaseClient) supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-                let badge = document.getElementById('realtimeBadge');
-                badge.innerHTML='🟢 Canlı Takip Aktif'; badge.style.background='#28a745';
-                realtimeChannel = supabaseClient.channel('device_data_changes')
-                    .on('postgres_changes', {event:'INSERT', schema:'public', table:'device_data'}, () => { refreshData(); })
-                    .subscribe(s=>{ if(s==='SUBSCRIBED') console.log('Realtime bağlı'); });
-            }catch(e){ console.error(e); }
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
         }
         
-        document.addEventListener('DOMContentLoaded',()=>{ refreshData(); setupRealtime(); setInterval(refreshData,30000); });
-        window.addEventListener('beforeunload',()=>{ if(realtimeChannel && supabaseClient) supabaseClient.removeChannel(realtimeChannel); });
+        function setupRealtime() {
+            try {
+                if (!supabaseClient) {
+                    supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+                }
+                
+                const badge = document.getElementById('realtimeBadge');
+                badge.innerHTML = '🟢 Canlı Takip Aktif';
+                badge.style.background = '#28a745';
+                
+                realtimeChannel = supabaseClient
+                    .channel('device_data_changes')
+                    .on('postgres_changes', {
+                        event: 'INSERT',
+                        schema: 'public',
+                        table: 'device_data'
+                    }, () => {
+                        refreshData();
+                    })
+                    .subscribe((status) => {
+                        if (status === 'SUBSCRIBED') {
+                            console.log('Realtime bağlantısı aktif');
+                        }
+                    });
+            } catch (error) {
+                console.error('Realtime kurulum hatası:', error);
+            }
+        }
+        
+        // Sayfa yüklendiğinde
+        document.addEventListener('DOMContentLoaded', () => {
+            refreshData();
+            setupRealtime();
+            setInterval(refreshData, 30000);
+        });
+        
+        window.addEventListener('beforeunload', () => {
+            if (realtimeChannel && supabaseClient) {
+                supabaseClient.removeChannel(realtimeChannel);
+            }
+        });
     </script>
 </body>
 </html>
